@@ -93,6 +93,8 @@ def main():
         for event in events:
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                running = False
             elif event.type == MOUSEBUTTONDOWN and event.button == 1:
                 for p in control_points:
                     if abs(p.x - event.pos[X]) < 10 and abs(p.y - event.pos[Y]) < 10 :
