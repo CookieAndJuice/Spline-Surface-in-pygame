@@ -63,7 +63,7 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             
         print("interval : " + str(interval))
         
-        tempCount = 1                                                   # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = list(cps)                                             # 계산값 임시 저장 리스트 1
         temp = [vec2d(0, 0) for i in range(0, len(cps))]                # 계산값 임시 저장 리스트 2
         
@@ -73,18 +73,16 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
                 alpha = (u - knts[i - 1]) / (knts[interval + 1] - knts[i - 1])          # 계수
                 
-                print("i : " + str(i) + " | iInitial : " + str(iInitial) + " | i - tempCount : " + str(i - tempCount) + " | alpha : " + str(alpha))
+                print("i : " + str(i) + " | iInitial : " + str(iInitial) + " | i - 1 : " + str(i - 1) + " | alpha : " + str(alpha))
                 
-                temp[i - tempCount] = (1 - alpha) * tempCps[i - tempCount] + alpha * tempCps[i - tempCount + 1]         # 결과가 인덱스 0으로 모이도록 임시 저장
-                
-            tempCount += 1
+                temp[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+            
             tempCps = list(temp)        # temp에 임시저장한 계산 결과를 tempCps로 옮김
             temp = [vec2d(0, 0) for i in range(0, len(cps))]
         
-        tempCount = iInitial + 1 - tempCount
-        print("iInitial + 1 - tempCount : " + str(tempCount))
-        result.append([int(tempCps[tempCount].x), int(tempCps[tempCount].y)])
-        print("temp0 : " + str(tempCps[tempCount].x) + ", " + str(tempCps[tempCount].y))
+        print("index : " + str(tempIndex))
+        result.append([int(tempCps[tempIndex].x), int(tempCps[tempIndex].y)])
+        print("result : " + str(tempCps[tempIndex].x) + ", " + str(tempCps[tempIndex].y))
 
     return result
 
