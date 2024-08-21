@@ -20,71 +20,93 @@ class vec2d(object):
     def __rmul__(self, num):
         x = self.x * num
         y = self.y * num
-        return vec2d(x, y)
+        return vec2d(x, y)        
 
 ######################################################################################
-# Bezier Surface De Casteljau
+# B Spline
 
-# 선형 보간
-def linearInterpolate(t, pointA, pointB):
-    resPoint = (1-t) * pointA + t * pointB
-    return resPoint
+# interval 찾는 함수
+def findInterval(knotList, point):
+    returnIndex = 0
+    floorPoint = math.floor(point)
+    
+    for i in range(0, len(knotList)):
+        
+        if (floorPoint == knotList[i]):
+            returnIndex = i
+    
+    return returnIndex
 
 # Cubic
-def calB_SplineSurface(cps, drawPoints):
-    if len(cps) != 4:
-        return None
+def calB_Spline(cps, knts, degree, numJoints=30):
     
-    resultU = [[], [], [], []]
-    result = []
+    # domain knots 계산
+    start = degree - 1              # domain 시작 지점
+    end = len(knts) - degree        # domain 끝 지점
+    domainNum = end - start + 1     # domain knots 개수
+    domainKnots = [knts[i] for i in range(start, end + 1)]
     
-    # n = len(cps) - 1
-    # h = 1.0 / (numJoints)
+    # 그릴 점들 간의 간격, 그릴 점들
+    h = (end - start) / numJoints
+    draws = [h * a + knts[start] for a in range(0, numJoints + 1)]        # domain knots를 numJoints등분
     
-    # print(n, h)
+    print(draws)
     
-    for t in drawPoints:        # drawPoints에 있는 t = (u,v) 이용
-        uPoints = [arr[:] for arr in cps]
-        
-        for height in range(0, 4):      # u 방향으로 베지어 곡선 만듦
-            for i in range(3, -1, -1):
-                for re in range(0, i):
-                    uPoints[height][re] = linearInterpolate(t.x, uPoints[height][re], uPoints[height][re + 1])
-
-            resultU[height].append(uPoints[height][0])
+    result = []         # b spline 계산 결과
+    
+    # de Boor Algorithm
+    for u in draws:
+        if (u == knts[end]):
+            interval = end - 1
+        else:
+            interval = findInterval(knts, u)            # knot interval 위치 찾기
             
-    for t in range(0, len(drawPoints)):         # v 방향으로 베지어 곡선 만듦
-        uPoints = [arr[:] for arr in resultU]       # u 방향으로 찍어놓은 점들을 가지고 옴
+        print("interval : " + str(interval))
         
-        for i in range(3, -1, -1):
-            for height in range(0, i):
-                uPoints[height][t] = linearInterpolate(drawPoints[t].y, uPoints[height][t], uPoints[height + 1][t])
-        print("height : " + str(height) + ", " + str(uPoints[height][t].y))
+        tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        tempCps = list(cps)                                             # 계산값 임시 저장 리스트 1
+        temp = [vec2d(0, 0) for i in range(0, len(cps))]                # 계산값 임시 저장 리스트 2
+        
+        for k in range(1, degree + 1):              # degree 인덱스 k
+            iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
+            
+            for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
+                alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])          # 계수
+                
+                print("i : " + str(i) + " | iInitial : " + str(iInitial) + " | i - 1 : " + str(i - 1) + " | alpha : " + str(alpha))
+                
+                temp[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+            
+            tempCps = list(temp)        # temp에 임시저장한 계산 결과를 tempCps로 옮김
+            temp = [vec2d(0, 0) for i in range(0, len(cps))]
+        
+        print("index : " + str(tempIndex))
+        result.append([int(tempCps[tempIndex].x), int(tempCps[tempIndex].y)])
+        print("result : " + str(tempCps[tempIndex].x) + ", " + str(tempCps[tempIndex].y))
 
-        result.append([int(uPoints[0][t].x), int(uPoints[0][t].y)])
-        
-    print(len(result))
     return result
 
 ######################################################################################
 
 # Control Points
-control_points = [[vec2d(414,144), vec2d(558,144), vec2d(702,144), vec2d(846,144)],
-                    [vec2d(414,288), vec2d(558,288), vec2d(702,288), vec2d(846,288)],
-                    [vec2d(414,432), vec2d(558,432), vec2d(702,432), vec2d(846,432)],
-                    [vec2d(414,576), vec2d(558,576), vec2d(702,576), vec2d(846,576)]]
+control_points = [vec2d(853,1080), vec2d(640,560), vec2d(1280,288), vec2d(1920,560), vec2d(1707, 1080)]
 
-draw_points = [vec2d(int(500 + 400 * math.cos(math.radians(theta))) / 1000, int(500 + 400 * math.sin(math.radians(theta))) / 1000) for theta in range(0, 372, 12)]
+# draw_points = [vec2d(int(500 + 400 * math.cos(math.radians(theta))) / 1000, int(500 + 400 * math.sin(math.radians(theta))) / 1000) for theta in range(0, 372, 12)]
 
-# Degree, Control Points 개수, Knots 개수, Line Segments 개수
+# Degree
 degree = 3
-cps = 16
-knotNum = cps + degree - 1
-lineSegNum = cps - degree
 
-for a in draw_points:
-    print("(" + str(a.x) + ", " + str(a.y) + ")")
+# knots
+knots = [i for i in range(0, len(control_points) + degree - 1)]
 
-bezierList = calB_SplineSurface(control_points, draw_points)
+# for a in draw_points:
+#     print("(" + str(a.x) + ", " + str(a.y) + ")")
 
-print(bezierList)
+bSplineList = calB_Spline(control_points, knots, degree)
+
+print(bSplineList)
+
+# 해야 할 일
+# 1. knot의 중복 기능 구현
+# 2. numpy를 이용한 구현
+# 3. b spline surface 구현

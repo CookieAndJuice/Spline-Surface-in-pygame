@@ -71,7 +71,7 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
             
             for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
-                alpha = (u - knts[i - 1]) / (knts[interval + 1] - knts[i - 1])          # 계수
+                alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])          # 계수
                 
                 print("i : " + str(i) + " | iInitial : " + str(iInitial) + " | i - 1 : " + str(i - 1) + " | alpha : " + str(alpha))
                 
@@ -105,10 +105,6 @@ knots = [i for i in range(0, len(control_points) + degree - 1)]
 bSplineList = calB_Spline(control_points, knots, degree)
 
 print(bSplineList)
-
-# 지금까지 결과
-# 1. knot이 3.0일 때 x좌표가 갑자기 확 줄어든다. -> index에 문제가 있는 것이 확실하다.
-# 2. 마지막에 점차 control point에 가까워지다가 마지막 결과는 control point와 동일해진다.
 
 # 해야 할 일
 # 1. knot의 중복 기능 구현
