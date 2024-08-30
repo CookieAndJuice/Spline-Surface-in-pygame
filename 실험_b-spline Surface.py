@@ -52,52 +52,91 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     
     print(draws)
     
-    result = []         # b spline 계산 결과
+    uResult = [[], [], [], []]      # u 방향 b spline 계산 결과
+    result = []                     # b spline 계산 최종 결과
     
     # de Boor Algorithm
-    for u in draws:
+    for u in draws:         # u 방향 b spline
         if (u == knts[end]):
             interval = end - 1
         else:
             interval = findInterval(knts, u)            # knot interval 위치 찾기
-            
-        print("interval : " + str(interval))
         
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
-        tempCps = list(cps)                                             # 계산값 임시 저장 리스트 1
-        temp = [vec2d(0, 0) for i in range(0, len(cps))]                # 계산값 임시 저장 리스트 2
+        tempCps = [arr[:] for arr in cps]                               # 계산값 임시 저장 리스트 1
+
+        for height in range(0, len(tempCps)):
+            temp = [vec2d(0, 0) for i in range(0, len(cps))]            # 계산값 임시 저장 리스트 2
         
-        for k in range(1, degree + 1):              # degree 인덱스 k
-            iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
-            
-            for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
-                alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])          # 계수
+            for k in range(1, degree + 1):              # degree 인덱스 k
+                iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
                 
-                print("i : " + str(i) + " | iInitial : " + str(iInitial) + " | i - 1 : " + str(i - 1) + " | alpha : " + str(alpha))
+                for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
+                    alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                    
+                    temp[i] = (1 - alpha) * tempCps[height][i - 1] + alpha * tempCps[height][i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
                 
-                temp[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+                tempCps[height] = list(temp)        # temp에 임시저장한 계산 결과를 tempCps로 옮김
+                temp = [vec2d(0, 0) for i in range(0, len(cps))]
             
-            tempCps = list(temp)        # temp에 임시저장한 계산 결과를 tempCps로 옮김
-            temp = [vec2d(0, 0) for i in range(0, len(cps))]
-        
-        print("index : " + str(tempIndex))
-        result.append([int(tempCps[tempIndex].x), int(tempCps[tempIndex].y)])
-        print("result : " + str(tempCps[tempIndex].x) + ", " + str(tempCps[tempIndex].y))
+            uResult[height].append(tempCps[height][tempIndex])
+
+    for v in draws:         # v 방향 b spline
+        if (v == knts[end]):
+            interval = end - 1
+        else:
+            interval = findInterval(knts, v)            # knot interval 위치 찾기
+
+        tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        tempCps = [arr[:] for arr in uResult]                           # 계산값 임시 저장 리스트 1
+
+        for width in range(0, len(tempCps[0])):
+            temp = [vec2d(0, 0) for i in range(0, len(uResult))]            # 계산값 임시 저장 리스트 2
+
+            for k in range(1, degree + 1):              # degree 인덱스 k
+                iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
+                
+                for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
+                    alpha = (v - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                    
+                    temp[i] = (1 - alpha) * tempCps[i - 1][width] + alpha * tempCps[i][width]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+                
+                for num in range(0, len(temp)):
+                    tempCps[num][width] = temp[num]        # temp에 임시저장한 계산 결과를 tempCps로 옮김
+                temp = [vec2d(0, 0) for i in range(0, len(uResult))]
+            
+            result.append([int(tempCps[tempIndex][width].x), int(tempCps[tempIndex][width].y)])
 
     return result
 
 ######################################################################################
 
-# Control Points
-control_points = [vec2d(853,1080), vec2d(640,560), vec2d(1280,288), vec2d(1920,560), vec2d(1707, 1080)]
+## screen setting ##
+screenWidth = 2560
+screenHeight = 1440
+size = (screenWidth, screenHeight)
 
-# draw_points = [vec2d(int(500 + 400 * math.cos(math.radians(theta))) / 1000, int(500 + 400 * math.sin(math.radians(theta))) / 1000) for theta in range(0, 372, 12)]
+interval = screenHeight / 5
+startX = int(screenWidth / 2 - (interval * 3 / 2))
+startY = int(screenHeight / 2 - (interval * 3 / 2))
+
+# Control Points
+control_points = [[vec2d(startX,startY), vec2d(startX + interval,startY), vec2d(startX + interval*2,startY), vec2d(startX + interval*3,startY)],
+                    [vec2d(startX,startY + interval), vec2d(startX + interval,startY + interval), vec2d(startX + interval*2,startY + interval), vec2d(startX + interval*3,startY + interval)],
+                    [vec2d(startX,startY + interval*2), vec2d(startX + interval,startY + interval*2), vec2d(startX + interval*2,startY + interval*2), vec2d(startX + interval*3,startY + interval*2)],
+                    [vec2d(startX,startY + interval*3), vec2d(startX + interval,startY + interval*3), vec2d(startX + interval*2,startY + interval*3), vec2d(startX + interval*3,startY + interval*3)]]
+
+# 그릴 점 (u, v) - (0 <= u, v <= 1)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
+draw_points = [vec2d(int(500 + 400 * math.cos(math.radians(theta))) / 1000, int(500 + 400 * math.sin(math.radians(theta))) / 1000) for theta in range(0, 372, 12)]
+# for a in draw_points:
+#     print("(" + str(a.x) + ", " + str(a.y) + ")")
 
 # Degree
 degree = 3
 
 # knots
 knots = [i for i in range(0, len(control_points) + degree - 1)]
+print(knots)
 
 # for a in draw_points:
 #     print("(" + str(a.x) + ", " + str(a.y) + ")")
