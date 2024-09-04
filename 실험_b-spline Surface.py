@@ -45,18 +45,26 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     end = len(knts) - degree        # domain 끝 지점
     domainNum = end - start + 1     # domain knots 개수
     domainKnots = [knts[i] for i in range(start, end + 1)]
+    print(domainKnots)
     
     # 그릴 점들 간의 간격, 그릴 점들
-    h = (end - start) / numJoints
-    draws = [h * a + knts[start] for a in range(0, numJoints + 1)]        # domain knots를 numJoints등분
+    # h = (end - start) / numJoints
+    # uDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]        # domain knots를 numJoints등분
+    # vDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]
+    # print(uDraws)
+
+    # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
+    uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    print(uDraws)
+    print(vDraws)
     
-    print(draws)
-    
-    uResult = [[], [], [], []]      # u 방향 b spline 계산 결과
+    uResult = [[] for a in range(0, len(cps))]      # u 방향 b spline 계산 결과
+    print(uResult)
     result = []                     # b spline 계산 최종 결과
     
     # de Boor Algorithm
-    for u in draws:         # u 방향 b spline
+    for u in uDraws:         # u 방향 b spline
         if (u == knts[end]):
             interval = end - 1
         else:
@@ -81,7 +89,7 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             
             uResult[height].append(tempCps[height][tempIndex])
 
-    for v in draws:         # v 방향 b spline
+    for v in vDraws:         # v 방향 b spline
         if (v == knts[end]):
             interval = end - 1
         else:
@@ -116,26 +124,28 @@ screenWidth = 2560
 screenHeight = 1440
 size = (screenWidth, screenHeight)
 
+# B-Spline 관련 설정값들 설정하는 부분
+cpsNum = 5
 interval = screenHeight / 5
-startX = int(screenWidth / 2 - (interval * 3 / 2))
-startY = int(screenHeight / 2 - (interval * 3 / 2))
+
+minW = int(screenWidth / 2 - (interval * 3 / 2))
+maxW = minW + interval * 3
+minH = int(screenHeight / 2 - (interval * 3 / 2))
+maxH = minH + interval * 3
+
+h = interval * 3 / (cpsNum- 1)
 
 # Control Points
-control_points = [[vec2d(startX,startY), vec2d(startX + interval,startY), vec2d(startX + interval*2,startY), vec2d(startX + interval*3,startY)],
-                    [vec2d(startX,startY + interval), vec2d(startX + interval,startY + interval), vec2d(startX + interval*2,startY + interval), vec2d(startX + interval*3,startY + interval)],
-                    [vec2d(startX,startY + interval*2), vec2d(startX + interval,startY + interval*2), vec2d(startX + interval*2,startY + interval*2), vec2d(startX + interval*3,startY + interval*2)],
-                    [vec2d(startX,startY + interval*3), vec2d(startX + interval,startY + interval*3), vec2d(startX + interval*2,startY + interval*3), vec2d(startX + interval*3,startY + interval*3)]]
-
-# 그릴 점 (u, v) - (0 <= u, v <= 1)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-draw_points = [vec2d(int(500 + 400 * math.cos(math.radians(theta))) / 1000, int(500 + 400 * math.sin(math.radians(theta))) / 1000) for theta in range(0, 372, 12)]
-# for a in draw_points:
-#     print("(" + str(a.x) + ", " + str(a.y) + ")")
+control_points = [[vec2d(minW + n * h, minH + a * h) for n in range(0, cpsNum)] for a in range(0, cpsNum)]
+for a in control_points:
+    for b in a:
+        print("(" + str(b.x) + ", " + str(b.y) + ")", end = ", ")
 
 # Degree
 degree = 3
 
 # knots
-knots = [i for i in range(0, len(control_points) + degree - 1)]
+knots = [i for i in range(0, cpsNum + degree - 1)]
 print(knots)
 
 # for a in draw_points:
@@ -144,8 +154,3 @@ print(knots)
 bSplineList = calB_Spline(control_points, knots, degree)
 
 print(bSplineList)
-
-# 해야 할 일
-# 1. knot의 중복 기능 구현
-# 2. numpy를 이용한 구현
-# 3. b spline surface 구현
