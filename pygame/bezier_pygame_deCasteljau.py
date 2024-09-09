@@ -48,16 +48,15 @@ def calBezierSurface(cps, drawPoints):
                     uPoints[height][re] = linearInterpolate(t.x, uPoints[height][re], uPoints[height][re + 1])
 
             resultU[height].append(uPoints[height][0])
-            result.append([int(uPoints[height][0].x), int(uPoints[height][0].y)])
             
-    # for t in range(0, len(drawPoints)):         # v 방향으로 베지어 곡선 만듦
-    #     uPoints = [arr[:] for arr in resultU]       # u 방향으로 찍어놓은 점들을 가지고 옴
+    for t in range(0, len(drawPoints)):         # v 방향으로 베지어 곡선 만듦
+        uPoints = [arr[:] for arr in resultU]       # u 방향으로 찍어놓은 점들을 가지고 옴
         
-    #     for i in range(3, -1, -1):
-    #         for height in range(0, i):
-    #             uPoints[height][t] = linearInterpolate(drawPoints[t].y, uPoints[height][t], uPoints[height + 1][t])
+        for i in range(3, -1, -1):
+            for height in range(0, i):
+                uPoints[height][t] = linearInterpolate(drawPoints[t].y, uPoints[height][t], uPoints[height + 1][t])
 
-    #     result.append([int(uPoints[0][t].x), int(uPoints[0][t].y)])
+        result.append([int(uPoints[0][t].x), int(uPoints[0][t].y)])
         
     return result
 

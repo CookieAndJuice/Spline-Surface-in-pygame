@@ -99,31 +99,30 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     # 지금 u 방향으로 만든 모든 점들을 v 방향으로 모조리 알고리즘을 통해 점으로 만들기 때문에 무조건 정사각형 모양이 된다.
     # 따라서 원을 그리려면 알고리즘을 u마다 v 하나만 나오도록(bezier surface처럼) 수정해야 한다.
     # 근데 그렇게 하면 범용성이 떨어지지 않을까??
-    for v in vDraws:         # v 방향 b spline
-        if (v == knts[end]):
+    for v in range(0, len(vDraws)):         # v 방향 b spline
+        if (vDraws[v] == knts[end]):
             interval = end - 1
         else:
-            interval = findInterval(knts, v)            # knot interval 위치 찾기
+            interval = findInterval(knts, vDraws[v])            # knot interval 위치 찾기
 
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = [arr[:] for arr in uResult]                           # 계산값 임시 저장 리스트 1
 
-        for width in range(0, len(tempCps[0])):
-            temp = [vec2d(0, 0) for i in range(0, len(uResult))]            # 계산값 임시 저장 리스트 2
+        temp = [vec2d(0, 0) for i in range(0, len(uResult))]            # 계산값 임시 저장 리스트 2
 
-            for k in range(1, degree + 1):              # degree 인덱스 k
-                iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
-                
-                for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
-                    alpha = (v - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
-                    
-                    temp[i] = (1 - alpha) * tempCps[i - 1][width] + alpha * tempCps[i][width]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
-                
-                for num in range(0, len(temp)):
-                    tempCps[num][width] = temp[num]        # temp에 임시저장한 계산 결과를 tempCps로 옮김
-                temp = [vec2d(0, 0) for i in range(0, len(uResult))]
+        for k in range(1, degree + 1):              # degree 인덱스 k
+            iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
             
-            result.append([int(tempCps[tempIndex][width].x), int(tempCps[tempIndex][width].y)])
+            for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
+                alpha = (vDraws[v] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                
+                temp[i] = (1 - alpha) * tempCps[i - 1][v] + alpha * tempCps[i][v]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+            
+            for num in range(0, len(temp)):
+                tempCps[num][v] = temp[num]        # temp에 임시저장한 계산 결과를 tempCps로 옮김
+            temp = [vec2d(0, 0) for i in range(0, len(uResult))]
+        
+        result.append([int(tempCps[tempIndex][v].x), int(tempCps[tempIndex][v].y)])
 
     return result
 
