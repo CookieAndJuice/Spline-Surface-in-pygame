@@ -1,5 +1,4 @@
 import math
-import numpy as np
 
 class vec2d(object):
     def __init__(self, x, y):

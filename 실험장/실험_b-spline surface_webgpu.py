@@ -1,4 +1,6 @@
 import math
+import numpy as np
+from wgpu.utils.compute import compute_with_buffers
 
 class vec2d(object):
     def __init__(self, x, y):
@@ -45,12 +47,6 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     domainNum = end - start + 1     # domain knots 개수
     domainKnots = [knts[i] for i in range(start, end + 1)]
     print(domainKnots)
-    
-    # 그릴 점들 간의 간격, 그릴 점들
-    # h = (end - start) / numJoints
-    # uDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]        # domain knots를 numJoints등분
-    # vDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]
-    # print(uDraws)
 
     # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
     uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
@@ -88,13 +84,6 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             
             uResult[height].append(tempCps[height][tempIndex])
 
-    # u에 의한 값들 중간 점검
-    for ind in range(0, len(uResult)):
-        for idx in range(0, len(uResult[ind])):
-            print("(" + str(uResult[ind][idx].x) + ", " + str(uResult[ind][idx].y) + ")", end = ", ")
-    print("fin.")
-    print()
-
     # 지금 u 방향으로 만든 모든 점들을 v 방향으로 모조리 알고리즘을 통해 점으로 만들기 때문에 무조건 정사각형 모양이 된다.
     # 따라서 원을 그리려면 알고리즘을 u마다 v 하나만 나오도록(bezier surface처럼) 수정해야 한다.
     # 근데 그렇게 하면 범용성이 떨어지지 않을까??
@@ -124,6 +113,28 @@ def calB_Spline(cps, knts, degree, numJoints=30):
         result.append([int(tempCps[tempIndex][v].x), int(tempCps[tempIndex][v].y)])
 
     return result
+
+######################################################################################
+# Compute Shader Code
+
+uDrs = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+
+compute_shader_code = """
+
+@group(0) @binding(0)
+var<storage, read> input: array<f32>;
+
+@group(0) @binding(1)
+var<storage, read_write> output: array<f32>;
+
+const nums = 372 / 12;
+
+@compute @workgroup_size(1)
+fn ComputeFunc(@builtin()) {
+    
+}
+
+"""
 
 ######################################################################################
 
