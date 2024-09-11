@@ -45,8 +45,8 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     start = degree - 1              # domain 시작 지점
     end = len(knts) - degree        # domain 끝 지점
     domainNum = end - start + 1     # domain knots 개수
-    domainKnots = [knts[i] for i in range(start, end + 1)]
-    print(domainKnots)
+    # domainKnots = [knts[i] for i in range(start, end + 1)]
+    # print(domainKnots)
 
     # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
     uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
@@ -115,29 +115,6 @@ def calB_Spline(cps, knts, degree, numJoints=30):
     return result
 
 ######################################################################################
-# Compute Shader Code
-
-uDrs = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-
-compute_shader_code = """
-
-@group(0) @binding(0)
-var<storage, read> input: array<f32>;
-
-@group(0) @binding(1)
-var<storage, read_write> output: array<f32>;
-
-const nums = 372 / 12;
-
-@compute @workgroup_size(1)
-fn ComputeFunc(@builtin()) {
-    
-}
-
-"""
-
-######################################################################################
-
 ## screen setting ##
 screenWidth = 2560
 screenHeight = 1440
@@ -169,6 +146,58 @@ print(knots)
 
 # for a in draw_points:
 #     print("(" + str(a.x) + ", " + str(a.y) + ")")
+
+######################################################################################
+# Compute Shader Code
+
+# domain knots 계산
+start = degree - 1              # domain 시작 지점
+end = len(knots) - degree        # domain 끝 지점
+domainNum = end - start + 1     # domain knots 개수
+
+uDrs = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+
+compute_shader_code = """
+
+@group(0) @binding(0)
+var<storage, read> input: array<u32>;
+
+@group(0) @binding(1)
+var<storage, read_write> output: array<u32>;
+
+@compute @workgroup_size(32)
+fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
+      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
+      @builtin(local_invocation_index) local_invocation_index: u32,
+      @builtin(num_workgroups) num_workgroups: vec3<u32>
+    ) {
+    let workgroup_index =  
+       workgroup_id.x +
+       workgroup_id.y * num_workgroups.x +
+       workgroup_id.z * num_workgroups.x * num_workgroups.y;
+
+    let global_invocation_index =
+       workgroup_index * 32 +
+       local_invocation_index;
+    
+    let theta = f32(input[global_invocation_index]);
+
+    var draw = u32(500 + 400 * cos(radians(theta)));
+    draw = draw / 1000 * (%d - 1) + %d;
+
+    output[global_invocation_index] = draw;
+}
+
+""" % (domainNum, start)
+
+thetas = np.array([theta for theta in range(0, 372, 12)])
+out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_shader_code, n = len(thetas))
+result = np.frombuffer(out[1], dtype=np.int32)
+print(result.tolist())
+print(len(result))
+
+######################################################################################
 
 bSplineList = calB_Spline(control_points, knots, degree)
 

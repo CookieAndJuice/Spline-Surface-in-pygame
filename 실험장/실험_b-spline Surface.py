@@ -94,10 +94,7 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             print("(" + str(uResult[ind][idx].x) + ", " + str(uResult[ind][idx].y) + ")", end = ", ")
     print("fin.")
     print()
-
-    # 지금 u 방향으로 만든 모든 점들을 v 방향으로 모조리 알고리즘을 통해 점으로 만들기 때문에 무조건 정사각형 모양이 된다.
-    # 따라서 원을 그리려면 알고리즘을 u마다 v 하나만 나오도록(bezier surface처럼) 수정해야 한다.
-    # 근데 그렇게 하면 범용성이 떨어지지 않을까??
+    
     for v in range(0, len(vDraws)):         # v 방향 b spline
         if (vDraws[v] == knts[end]):
             interval = end - 1
