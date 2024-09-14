@@ -1,6 +1,8 @@
 import pygame, sys
 from pygame.locals import *
 import math
+import numpy as np
+from wgpu.utils.compute import compute_with_buffers
 
 class vec2d(object):
     def __init__(self, x, y):
@@ -39,22 +41,10 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
-def calB_Spline(cps, knts, degree, numJoints=30):
+def calB_Spline(cps, knts, degree, uDraws, vDraws):
     
     # domain knots 계산
-    start = degree - 1              # domain 시작 지점
     end = len(knts) - degree        # domain 끝 지점
-    domainNum = end - start + 1     # domain knots 개수
-    domainKnots = [knts[i] for i in range(start, end + 1)]
-    
-    # 그릴 점들 간의 간격, 그릴 점들
-    # h = (end - start) / numJoints
-    # uDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]        # domain knots를 numJoints등분
-    # vDraws = [h * a + knts[start] for a in range(0, numJoints + 1)]
-
-    # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-    uDraws = [(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    vDraws = [(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
     
     uResult = [[] for a in range(0, len(cps))]      # u 방향 b spline 계산 결과
     result = []                     # b spline 계산 최종 결과
@@ -158,6 +148,94 @@ def main():
 
     # knots
     knots = [i for i in range(0, cpsNum + degree - 1)]
+    
+    ######################################################################################
+    # Compute Shader Code
+
+    # domain knots 계산
+    start = degree - 1              # domain 시작 지점
+    end = len(knots) - degree        # domain 끝 지점
+    domainNum = end - start + 1     # domain knots 개수
+
+    uDrs = [(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    print("uDrs")
+    print(uDrs)
+
+    compute_uDraws_code = """
+
+    @group(0) @binding(0)
+    var<storage, read> input: array<u32>;
+
+    @group(0) @binding(1)
+    var<storage, read_write> output: array<f32>;
+
+    @compute @workgroup_size(32)
+    fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
+        @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+        @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
+        @builtin(local_invocation_index) local_invocation_index: u32,
+        @builtin(num_workgroups) num_workgroups: vec3<u32>
+        ) {
+        let workgroup_index =  
+        workgroup_id.x +
+        workgroup_id.y * num_workgroups.x +
+        workgroup_id.z * num_workgroups.x * num_workgroups.y;
+
+        let global_invocation_index =
+        workgroup_index * 32 +
+        local_invocation_index;
+        
+        let theta = f32(input[global_invocation_index]);
+
+        var draw = (500 + 400 * cos(radians(theta)));
+        draw = draw / 1000 * (%d - 1) + %d;
+
+        output[global_invocation_index] = draw;
+    }
+
+    """ % (domainNum, start)
+
+    compute_vDraws_code = """
+
+    @group(0) @binding(0)
+    var<storage, read> input: array<u32>;
+
+    @group(0) @binding(1)
+    var<storage, read_write> output: array<f32>;
+
+    @compute @workgroup_size(32)
+    fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
+        @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+        @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
+        @builtin(local_invocation_index) local_invocation_index: u32,
+        @builtin(num_workgroups) num_workgroups: vec3<u32>
+        ) {
+        let workgroup_index =  
+        workgroup_id.x +
+        workgroup_id.y * num_workgroups.x +
+        workgroup_id.z * num_workgroups.x * num_workgroups.y;
+
+        let global_invocation_index =
+        workgroup_index * 32 +
+        local_invocation_index;
+        
+        let theta = f32(input[global_invocation_index]);
+
+        var draw = (500 + 400 * sin(radians(theta)));
+        draw = draw / 1000 * (%d - 1) + %d;
+
+        output[global_invocation_index] = draw;
+    }
+
+    """ % (domainNum, start)
+
+    thetas = np.array([theta for theta in range(0, 372, 12)])
+
+    out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_uDraws_code, n = len(thetas))
+    uDraws = np.frombuffer(out[1], dtype=np.float32)
+
+    out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_vDraws_code, n = len(thetas))
+    vDraws = np.frombuffer(out[1], dtype=np.float32)
 
     ######################################################################################
     
@@ -200,7 +278,7 @@ def main():
         for i in range(0, cpsNum):
             pygame.draw.aalines(screen, BLACK, False, [(control_points[j][i].x, control_points[j][i].y) for j in range(0, cpsNum)])
         
-        bSplineList = calB_Spline(control_points, knots, degree)
+        bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
         pygame.draw.aalines(screen, BLUE, False, bSplineList)
 
         for bPos in bSplineList:

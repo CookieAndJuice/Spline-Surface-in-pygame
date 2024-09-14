@@ -39,20 +39,16 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
-def calB_Spline(cps, knts, degree, numJoints=30):
+def calB_Spline(cps, knts, degree, uDraws, vDraws):
     
     # domain knots 계산
-    start = degree - 1              # domain 시작 지점
     end = len(knts) - degree        # domain 끝 지점
-    domainNum = end - start + 1     # domain knots 개수
-    # domainKnots = [knts[i] for i in range(start, end + 1)]
-    # print(domainKnots)
 
     # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-    uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    print(uDraws)
-    print(vDraws)
+    # uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    # vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    # print(uDraws)
+    # print(vDraws)
     
     uResult = [[] for a in range(0, len(cps))]      # u 방향 b spline 계산 결과
     print(uResult)
@@ -84,9 +80,6 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             
             uResult[height].append(tempCps[height][tempIndex])
 
-    # 지금 u 방향으로 만든 모든 점들을 v 방향으로 모조리 알고리즘을 통해 점으로 만들기 때문에 무조건 정사각형 모양이 된다.
-    # 따라서 원을 그리려면 알고리즘을 u마다 v 하나만 나오도록(bezier surface처럼) 수정해야 한다.
-    # 근데 그렇게 하면 범용성이 떨어지지 않을까??
     for v in range(0, len(vDraws)):         # v 방향 b spline
         if (vDraws[v] == knts[end]):
             interval = end - 1
@@ -155,15 +148,17 @@ start = degree - 1              # domain 시작 지점
 end = len(knots) - degree        # domain 끝 지점
 domainNum = end - start + 1     # domain knots 개수
 
-uDrs = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+uDrs = [(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+print("uDrs")
+print(uDrs)
 
-compute_shader_code = """
+compute_uDraws_code = """
 
 @group(0) @binding(0)
 var<storage, read> input: array<u32>;
 
 @group(0) @binding(1)
-var<storage, read_write> output: array<u32>;
+var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(32)
 fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
@@ -183,7 +178,41 @@ fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
     
     let theta = f32(input[global_invocation_index]);
 
-    var draw = u32(500 + 400 * cos(radians(theta)));
+    var draw = (500 + 400 * cos(radians(theta)));
+    draw = draw / 1000 * (%d - 1) + %d;
+
+    output[global_invocation_index] = draw;
+}
+
+""" % (domainNum, start)
+
+compute_vDraws_code = """
+
+@group(0) @binding(0)
+var<storage, read> input: array<u32>;
+
+@group(0) @binding(1)
+var<storage, read_write> output: array<f32>;
+
+@compute @workgroup_size(32)
+fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
+      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
+      @builtin(local_invocation_index) local_invocation_index: u32,
+      @builtin(num_workgroups) num_workgroups: vec3<u32>
+    ) {
+    let workgroup_index =  
+       workgroup_id.x +
+       workgroup_id.y * num_workgroups.x +
+       workgroup_id.z * num_workgroups.x * num_workgroups.y;
+
+    let global_invocation_index =
+       workgroup_index * 32 +
+       local_invocation_index;
+    
+    let theta = f32(input[global_invocation_index]);
+
+    var draw = (500 + 400 * sin(radians(theta)));
     draw = draw / 1000 * (%d - 1) + %d;
 
     output[global_invocation_index] = draw;
@@ -192,13 +221,21 @@ fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
 """ % (domainNum, start)
 
 thetas = np.array([theta for theta in range(0, 372, 12)])
-out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_shader_code, n = len(thetas))
-result = np.frombuffer(out[1], dtype=np.int32)
-print(result.tolist())
-print(len(result))
+print("thetas")
+print(thetas)
+
+out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_uDraws_code, n = len(thetas))
+uDraws = np.frombuffer(out[1], dtype=np.float32)
+print(uDraws.tolist())
+print(len(uDraws))
+
+out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_vDraws_code, n = len(thetas))
+vDraws = np.frombuffer(out[1], dtype=np.float32)
+print(vDraws.tolist())
+print(len(vDraws))
 
 ######################################################################################
 
-bSplineList = calB_Spline(control_points, knots, degree)
+bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
 
 print(bSplineList)
