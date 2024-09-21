@@ -225,17 +225,67 @@ print("thetas")
 print(thetas)
 
 out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_uDraws_code, n = len(thetas))
+# Select data from buffer at binding 1
 uDraws = np.frombuffer(out[1], dtype=np.float32)
 print(uDraws.tolist())
 print(len(uDraws))
 
 out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_vDraws_code, n = len(thetas))
+# Select data from buffer at binding 1
 vDraws = np.frombuffer(out[1], dtype=np.float32)
 print(vDraws.tolist())
 print(len(vDraws))
+
+######################################################################################
+# B Spline Function
+
+compute_B_Spline_code = """
+@group(0) @binding(0)
+var<storage, read> uInputs: array<f32>;
+
+@group(0) @binding(1)
+var<storage, read> vInputs: array<f32>;
+
+@group(0) @binding(2)
+var<storage, read> cps: array<f32>;
+
+@group(0) @binding(3)
+var<storage, read> knots: array<u32>;
+
+@group(0) @binding(4)
+var<storage, read_write> output: array<u32>;
+
+@compute @workgroup_size(32)
+fn main()
+{
+    let end = arrayLength(knots, read) - %d;
+    // uResult = [[] for a in range(0, len(cps))]         // u 방향 b spline 계산 결과
+    
+    // de Boor Algorithm
+    for (var i = 0; i < length(uInputs, read); ++i)       // u 방향 b spline
+    {
+        
+    }
+    
+    for (var i = 0; i < length(vInputs, read); ++i)       // v 방향 b spline
+    {
+        
+    }
+}
+
+""" % (degree)
+
+out = compute_with_buffers({0: uDraws, 1: vDraws, 2: control_points, 3: knots},
+                           {4: thetas.nbytes}, compute_B_Spline_code, n = len(thetas))
+# Select data from buffer at binding 4
+bSplines = np.frombuffer(out[4], dtype=np.int32)
+print(bSplines.tolist())
+print(len(bSplines))
 
 ######################################################################################
 
 bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
 
 print(bSplineList)
+
+## control_points의 vec2d를 np.array로 바꿔야 한다.
