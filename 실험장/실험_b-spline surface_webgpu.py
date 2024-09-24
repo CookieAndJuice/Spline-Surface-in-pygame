@@ -21,7 +21,7 @@ class vec2d(object):
     def __rmul__(self, num):
         x = self.x * num
         y = self.y * num
-        return vec2d(x, y)        
+        return vec2d(x, y)
 
 ######################################################################################
 # B Spline
@@ -137,8 +137,12 @@ degree = 3
 knots = [i for i in range(0, cpsNum + degree - 1)]
 print(knots)
 
-# for a in draw_points:
-#     print("(" + str(a.x) + ", " + str(a.y) + ")")
+# Serialize Control Points
+serial_cps = []
+for points in control_points:
+    for point in points:
+        serial_cps.append(point.x)
+        serial_cps.append(point.y)
 
 ######################################################################################
 # Compute Shader Code
@@ -259,7 +263,6 @@ var<storage, read_write> output: array<u32>;
 fn main()
 {
     let end = arrayLength(knots, read) - %d;
-    // uResult = [[] for a in range(0, len(cps))]         // u 방향 b spline 계산 결과
     
     // de Boor Algorithm
     for (var i = 0; i < length(uInputs, read); ++i)       // u 방향 b spline
@@ -275,7 +278,7 @@ fn main()
 
 """ % (degree)
 
-out = compute_with_buffers({0: uDraws, 1: vDraws, 2: control_points, 3: knots},
+out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots},
                            {4: thetas.nbytes}, compute_B_Spline_code, n = len(thetas))
 # Select data from buffer at binding 4
 bSplines = np.frombuffer(out[4], dtype=np.int32)
@@ -288,4 +291,6 @@ bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
 
 print(bSplineList)
 
-## control_points의 vec2d를 np.array로 바꿔야 한다.
+## vec2d 형태를 1차원 배열 형태로 직렬화해서 셰이더에 넘겨야 한다.
+## 그 말은 출력할 때에도 반대로 해줘야 해야한다는 소리
+## compute shader에서 어떤 것을 병렬처리로 계산해야 할 지 정해야 함 -> 아마 u방향, v방향 knot들에 대한 de boor 알고리즘일 듯
