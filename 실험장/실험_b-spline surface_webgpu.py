@@ -46,6 +46,7 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws, uIntervals, vIntervals):
     
     uResult = [[] for a in range(0, len(cps))]      # u 방향 b spline 계산 결과
     print(uResult)
+    print("\n")
     result = []                     # b spline 계산 최종 결과
     
     # de Boor Algorithm
@@ -97,6 +98,13 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws, uIntervals, vIntervals):
             
             uResult[height].append(tempCps[height][tempIndex])
 
+    for a in uResult:
+        print(len(a))
+        for b in a:
+            print("(" + str(b.x) + ", " + str(b.y) + ")", end = ", ")
+        print("\n")
+    print(len(uResult))
+
     for v in range(0, len(vDraws)):         # v 방향 b spline
         interval = vIntervals[v]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
@@ -147,7 +155,7 @@ for a in control_points:
 degree = 3
 
 # knots
-knots = [i for i in range(0, cpsNum + degree - 1)]
+knots = np.array([i for i in range(0, cpsNum + degree - 1)])
 print(knots)
 
 # Serialize Control Points
@@ -156,6 +164,7 @@ for points in control_points:
     for point in points:
         serial_cps.append(point.x)
         serial_cps.append(point.y)
+serial_cps = np.array(serial_cps)
 
 # domain knots 계산
 start = degree - 1              # domain 시작 지점
@@ -163,8 +172,8 @@ end = len(knots) - degree        # domain 끝 지점
 domainNum = end - start + 1     # domain knots 개수
 
 # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
+vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
 print(uDraws)
 print(vDraws)
 
@@ -177,6 +186,7 @@ for u in uDraws:
     else:
         interval = findInterval(knots, u)
     uIntervals.append(interval)
+uIntervals = np.array(uIntervals)
 
 vIntervals = []
 for v in vDraws:
@@ -186,6 +196,7 @@ for v in vDraws:
     else:
         interval = findInterval(knots, v)
     vIntervals.append(interval)
+vIntervals = np.array(vIntervals)
 
 ######################################################################################
 # B Spline Function
@@ -210,32 +221,74 @@ var<storage, read> uIntervals: array<u32>;
 var<storage, read> vIntervals: array<u32>;
 
 @group(0) @binding(6)
-var<storage, read_write> output: array<vec2<u32>>;
+var<storage, read_write> output: array<u32>;
 
 @compute @workgroup_size(32)
-fn main()
+fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
 {
-    let end = arrayLength(knots, read) - %d;
+    let degree = %d;
+    let cpsWidth = %d;
+    let cpsHeight = %d;
+    var uResult: array<vec2<f32>, cpsWidth>;
     
-    // de Boor Algorithm
-    for (var i = 0; i < length(uInputs, read); ++i)       // u 방향 b spline
+    // u 방향 b spline
+    var uTempIndex = uIntervals[gloval_invocation_id.x] + 1;
+    
+    let cpsNum = cpsWidth * cpsHeight;
+    var tempCps = array<vec2<f32>, cpsNum>(0.0, 0.0);
+    
+    var index = 0;
+    while(index < cpsNum * 2)
     {
-        var tempIndex = uIntervals[i] + 1;
+        tempCps[index].x = cps[index];
+        tempCps[index].y = cps[index + 1];
+        index += 2;
     }
     
-    for (var i = 0; i < length(vInputs, read); ++i)       // v 방향 b spline
+    var height = 0;
+    while (height * cpsWidth < cpsNum)
     {
+        var tempArr: array<vec2<f32>, cpsNum>;
         
+        for (var k = 1; k < degree + 1; k++)
+        {
+            var a = 0;
+            while (a < cpsNum)
+            {
+                tempArr[a] = vec2<f32>(0.0, 0.0);
+                a += 2;
+            }
+            
+            let iInitial = uinterval - degree + k + 1;
+            
+            for (var i = iInitial; i < interval + 2; i++)
+            {
+                let alpha = (uInputs[gloval_invocation_id.x] - knots[i - 1]) / (knots[i + degree - k] - knots[i - 1]);
+                
+                temp[i] = (1 - alpha) * tempCps[i - 1 + height * cpsWidth] + alpha * tempCps[i + height * cpsWidth];
+            }
+            
+            for (var i = 0; i < cpsWidth; i++)
+            {
+                tempCps[i + height * cpsWidth] = temp[i];
+            }
+        }
+        uResult[height] = tempCps[uTempIndex + height * cpsWidth];
+        height++;
     }
+    
+    // v 방향 b spline
+    var vTempIndex = vIntervals[gloval_invocation_id.x] + 1;
+    
 }
 
-""" % (degree)
+""" % (degree, cpsNum, cpsNum)
 
-out = []
+out = np.zeros(len(serial_cps), dtype=np.uint32)
 out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals},
                            {6: out.nbytes}, compute_B_Spline_code, n = 32)
 # Select data from buffer at binding 4
-bSplines = np.frombuffer(out[6], dtype=np.int32)
+bSplines = np.frombuffer(out[6], dtype=np.uint32)
 print(bSplines.tolist())
 print(len(bSplines))
 
