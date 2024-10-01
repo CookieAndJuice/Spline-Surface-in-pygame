@@ -41,7 +41,7 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
-def calB_Spline(cps, knts, degree, uDraws, vDraws):
+def calB_Spline(cps, knts, degree, uDraws, vDraws, uIntervals, vIntervals):
     
     # domain knots 계산
     end = len(knts) - degree        # domain 끝 지점
@@ -50,12 +50,8 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws):
     result = []                     # b spline 계산 최종 결과
     
     # de Boor Algorithm
-    for u in uDraws:         # u 방향 b spline
-        if (u == knts[end]):
-            interval = end - 1
-        else:
-            interval = findInterval(knts, u)            # knot interval 위치 찾기
-        
+    for u in range(0, len(uDraws)):         # u 방향 b spline
+        interval = uIntervals[u]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = [arr[:] for arr in cps]                               # 계산값 임시 저장 리스트 1
 
@@ -66,7 +62,7 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws):
                 iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
                 
                 for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
-                    alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                    alpha = (uDraws[u] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
                     
                     temp[i] = (1 - alpha) * tempCps[height][i - 1] + alpha * tempCps[height][i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
                 
@@ -76,11 +72,7 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws):
             uResult[height].append(tempCps[height][tempIndex])
 
     for v in range(0, len(vDraws)):         # v 방향 b spline
-        if (vDraws[v] == knts[end]):
-            interval = end - 1
-        else:
-            interval = findInterval(knts, vDraws[v])            # knot interval 위치 찾기
-
+        interval = vIntervals[v]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = [arr[:] for arr in uResult]                           # 계산값 임시 저장 리스트 1
 
@@ -157,85 +149,28 @@ def main():
     end = len(knots) - degree        # domain 끝 지점
     domainNum = end - start + 1     # domain knots 개수
 
-    uDrs = [(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    print("uDrs")
-    print(uDrs)
+    # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
+    uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+    vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
 
-    compute_uDraws_code = """
+    # interval lists
+    uIntervals = []
+    for u in uDraws:
+        interval = 0
+        if (u == knots[end]):
+            interval = end - 1
+        else:
+            interval = findInterval(knots, u)
+        uIntervals.append(interval)
 
-    @group(0) @binding(0)
-    var<storage, read> input: array<u32>;
-
-    @group(0) @binding(1)
-    var<storage, read_write> output: array<f32>;
-
-    @compute @workgroup_size(32)
-    fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
-        @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-        @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
-        @builtin(local_invocation_index) local_invocation_index: u32,
-        @builtin(num_workgroups) num_workgroups: vec3<u32>
-        ) {
-        let workgroup_index =  
-        workgroup_id.x +
-        workgroup_id.y * num_workgroups.x +
-        workgroup_id.z * num_workgroups.x * num_workgroups.y;
-
-        let global_invocation_index =
-        workgroup_index * 32 +
-        local_invocation_index;
-        
-        let theta = f32(input[global_invocation_index]);
-
-        var draw = (500 + 400 * cos(radians(theta)));
-        draw = draw / 1000 * (%d - 1) + %d;
-
-        output[global_invocation_index] = draw;
-    }
-
-    """ % (domainNum, start)
-
-    compute_vDraws_code = """
-
-    @group(0) @binding(0)
-    var<storage, read> input: array<u32>;
-
-    @group(0) @binding(1)
-    var<storage, read_write> output: array<f32>;
-
-    @compute @workgroup_size(32)
-    fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
-        @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-        @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
-        @builtin(local_invocation_index) local_invocation_index: u32,
-        @builtin(num_workgroups) num_workgroups: vec3<u32>
-        ) {
-        let workgroup_index =  
-        workgroup_id.x +
-        workgroup_id.y * num_workgroups.x +
-        workgroup_id.z * num_workgroups.x * num_workgroups.y;
-
-        let global_invocation_index =
-        workgroup_index * 32 +
-        local_invocation_index;
-        
-        let theta = f32(input[global_invocation_index]);
-
-        var draw = (500 + 400 * sin(radians(theta)));
-        draw = draw / 1000 * (%d - 1) + %d;
-
-        output[global_invocation_index] = draw;
-    }
-
-    """ % (domainNum, start)
-
-    thetas = np.array([theta for theta in range(0, 372, 12)])
-
-    out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_uDraws_code, n = len(thetas))
-    uDraws = np.frombuffer(out[1], dtype=np.float32)
-
-    out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_vDraws_code, n = len(thetas))
-    vDraws = np.frombuffer(out[1], dtype=np.float32)
+    vIntervals = []
+    for v in vDraws:
+        interval = 0
+        if (v == knots[end]):
+            interval = end - 1
+        else:
+            interval = findInterval(knots, v)
+        vIntervals.append(interval)
 
     ######################################################################################
     
@@ -278,7 +213,7 @@ def main():
         for i in range(0, cpsNum):
             pygame.draw.aalines(screen, BLACK, False, [(control_points[j][i].x, control_points[j][i].y) for j in range(0, cpsNum)])
         
-        bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
+        bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws, uIntervals, vIntervals)
         pygame.draw.aalines(screen, BLUE, False, bSplineList)
 
         for bPos in bSplineList:

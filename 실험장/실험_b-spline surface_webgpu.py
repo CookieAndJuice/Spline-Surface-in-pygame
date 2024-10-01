@@ -39,28 +39,45 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
-def calB_Spline(cps, knts, degree, uDraws, vDraws):
+def calB_Spline(cps, knts, degree, uDraws, vDraws, uIntervals, vIntervals):
     
     # domain knots 계산
     end = len(knts) - degree        # domain 끝 지점
-
-    # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-    # uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    # vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-    # print(uDraws)
-    # print(vDraws)
     
     uResult = [[] for a in range(0, len(cps))]      # u 방향 b spline 계산 결과
     print(uResult)
     result = []                     # b spline 계산 최종 결과
     
     # de Boor Algorithm
-    for u in uDraws:         # u 방향 b spline
-        if (u == knts[end]):
-            interval = end - 1
-        else:
-            interval = findInterval(knts, u)            # knot interval 위치 찾기
-        
+    # for u in range(0, len(uDraws)):
+    #     uInterval = uIntervals[u]
+    #     for v in range(0, len(vDraws)):
+    #         vInterval = vIntervals[v]
+    #         uTempIndex = uInterval + 1                                  # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수1
+    #         vTempIndex = vInterval + 1                                  # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수2
+
+    #         tempCps = [arr[:] for arr in cps]                           # 계산값 임시 저장 리스트 1
+
+    #         for height in range(0, len(tempCps)):
+    #             temp = [vec2d(0, 0) for i in range(0, len(cps))]            # 계산값 임시 저장 리스트 2
+            
+    #             for k in range(1, degree + 1):              # degree 인덱스 k
+    #                 iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
+                    
+    #                 for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
+    #                     alpha = (uDraws[u] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                        
+    #                     temp[i] = (1 - alpha) * tempCps[height][i - 1] + alpha * tempCps[height][i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+                    
+    #                 tempCps[height] = list(temp)        # temp에 임시저장한 계산 결과를 tempCps로 옮김
+    #                 temp = [vec2d(0, 0) for i in range(0, len(cps))]
+                
+    #             uResult[height].append(tempCps[height][tempIndex])
+
+
+    # 예전 de Boor Algorithm
+    for u in range(0, len(uDraws)):         # u 방향 b spline
+        interval = uIntervals[u]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = [arr[:] for arr in cps]                               # 계산값 임시 저장 리스트 1
 
@@ -71,7 +88,7 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws):
                 iInitial = interval - degree + k + 1    # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
                 
                 for i in range(iInitial, interval + 2):                                     # i부터 최대값까지 반복 계산
-                    alpha = (u - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
+                    alpha = (uDraws[u] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])        # 계수
                     
                     temp[i] = (1 - alpha) * tempCps[height][i - 1] + alpha * tempCps[height][i]         # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
                 
@@ -81,11 +98,7 @@ def calB_Spline(cps, knts, degree, uDraws, vDraws):
             uResult[height].append(tempCps[height][tempIndex])
 
     for v in range(0, len(vDraws)):         # v 방향 b spline
-        if (vDraws[v] == knts[end]):
-            interval = end - 1
-        else:
-            interval = findInterval(knts, vDraws[v])            # knot interval 위치 찾기
-
+        interval = vIntervals[v]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
         tempCps = [arr[:] for arr in uResult]                           # 계산값 임시 저장 리스트 1
 
@@ -144,101 +157,35 @@ for points in control_points:
         serial_cps.append(point.x)
         serial_cps.append(point.y)
 
-######################################################################################
-# Compute Shader Code
-
 # domain knots 계산
 start = degree - 1              # domain 시작 지점
 end = len(knots) - degree        # domain 끝 지점
 domainNum = end - start + 1     # domain knots 개수
 
-uDrs = [(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
-print("uDrs")
-print(uDrs)
+# 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
+uDraws = [int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+vDraws = [int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)]
+print(uDraws)
+print(vDraws)
 
-compute_uDraws_code = """
+# interval lists
+uIntervals = []
+for u in uDraws:
+    interval = 0
+    if (u == knots[end]):
+        interval = end - 1
+    else:
+        interval = findInterval(knots, u)
+    uIntervals.append(interval)
 
-@group(0) @binding(0)
-var<storage, read> input: array<u32>;
-
-@group(0) @binding(1)
-var<storage, read_write> output: array<f32>;
-
-@compute @workgroup_size(32)
-fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
-      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
-      @builtin(local_invocation_index) local_invocation_index: u32,
-      @builtin(num_workgroups) num_workgroups: vec3<u32>
-    ) {
-    let workgroup_index =  
-       workgroup_id.x +
-       workgroup_id.y * num_workgroups.x +
-       workgroup_id.z * num_workgroups.x * num_workgroups.y;
-
-    let global_invocation_index =
-       workgroup_index * 32 +
-       local_invocation_index;
-    
-    let theta = f32(input[global_invocation_index]);
-
-    var draw = (500 + 400 * cos(radians(theta)));
-    draw = draw / 1000 * (%d - 1) + %d;
-
-    output[global_invocation_index] = draw;
-}
-
-""" % (domainNum, start)
-
-compute_vDraws_code = """
-
-@group(0) @binding(0)
-var<storage, read> input: array<u32>;
-
-@group(0) @binding(1)
-var<storage, read_write> output: array<f32>;
-
-@compute @workgroup_size(32)
-fn main(@builtin(workgroup_id) workgroup_id : vec3<u32>,
-      @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-      @builtin(global_invocation_id) global_invocation_id : vec3<u32>,
-      @builtin(local_invocation_index) local_invocation_index: u32,
-      @builtin(num_workgroups) num_workgroups: vec3<u32>
-    ) {
-    let workgroup_index =  
-       workgroup_id.x +
-       workgroup_id.y * num_workgroups.x +
-       workgroup_id.z * num_workgroups.x * num_workgroups.y;
-
-    let global_invocation_index =
-       workgroup_index * 32 +
-       local_invocation_index;
-    
-    let theta = f32(input[global_invocation_index]);
-
-    var draw = (500 + 400 * sin(radians(theta)));
-    draw = draw / 1000 * (%d - 1) + %d;
-
-    output[global_invocation_index] = draw;
-}
-
-""" % (domainNum, start)
-
-thetas = np.array([theta for theta in range(0, 372, 12)])
-print("thetas")
-print(thetas)
-
-out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_uDraws_code, n = len(thetas))
-# Select data from buffer at binding 1
-uDraws = np.frombuffer(out[1], dtype=np.float32)
-print(uDraws.tolist())
-print(len(uDraws))
-
-out = compute_with_buffers({0: thetas}, {1: thetas.nbytes}, compute_vDraws_code, n = len(thetas))
-# Select data from buffer at binding 1
-vDraws = np.frombuffer(out[1], dtype=np.float32)
-print(vDraws.tolist())
-print(len(vDraws))
+vIntervals = []
+for v in vDraws:
+    interval = 0
+    if (v == knots[end]):
+        interval = end - 1
+    else:
+        interval = findInterval(knots, v)
+    vIntervals.append(interval)
 
 ######################################################################################
 # B Spline Function
@@ -257,7 +204,13 @@ var<storage, read> cps: array<f32>;
 var<storage, read> knots: array<u32>;
 
 @group(0) @binding(4)
-var<storage, read_write> output: array<u32>;
+var<storage, read> uIntervals: array<u32>;
+
+@group(0) @binding(5)
+var<storage, read> vIntervals: array<u32>;
+
+@group(0) @binding(6)
+var<storage, read_write> output: array<vec2<u32>>;
 
 @compute @workgroup_size(32)
 fn main()
@@ -267,7 +220,7 @@ fn main()
     // de Boor Algorithm
     for (var i = 0; i < length(uInputs, read); ++i)       // u 방향 b spline
     {
-        
+        var tempIndex = uIntervals[i] + 1;
     }
     
     for (var i = 0; i < length(vInputs, read); ++i)       // v 방향 b spline
@@ -278,16 +231,17 @@ fn main()
 
 """ % (degree)
 
-out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots},
-                           {4: thetas.nbytes}, compute_B_Spline_code, n = len(thetas))
+out = []
+out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals},
+                           {6: out.nbytes}, compute_B_Spline_code, n = 32)
 # Select data from buffer at binding 4
-bSplines = np.frombuffer(out[4], dtype=np.int32)
+bSplines = np.frombuffer(out[6], dtype=np.int32)
 print(bSplines.tolist())
 print(len(bSplines))
 
 ######################################################################################
 
-bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws)
+bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws, uIntervals, vIntervals)
 
 print(bSplineList)
 
