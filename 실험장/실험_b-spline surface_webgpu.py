@@ -136,6 +136,7 @@ size = (screenWidth, screenHeight)
 
 # B-Spline 관련 설정값들 설정하는 부분
 cpsNum = 5
+cpsLen = cpsNum * cpsNum
 interval = screenHeight / 5
 
 minW = int(screenWidth / 2 - (interval * 3 / 2))
@@ -226,51 +227,52 @@ var<storage, read_write> output: array<u32>;
 @compute @workgroup_size(32)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
 {
-    let degree = %d;
-    let cpsWidth = %d;
-    let cpsHeight = %d;
-    var uResult: array<vec2<f32>, cpsWidth>;
-    
+    let degree = u32(%d);
+    let cpsWidth = u32(%d);
+    let cpsHeight = u32(%d);
+    var uResult: array<vec2<f32>, %d>;
+
     // u 방향 b spline
-    var uTempIndex = uIntervals[gloval_invocation_id.x] + 1;
-    
-    let cpsNum = cpsWidth * cpsHeight;
-    var tempCps = array<vec2<f32>, cpsNum>(0.0, 0.0);
-    
-    var index = 0;
+    let uInterval = uIntervals[global_invocation_id.x];
+    var uTempIndex = uInterval + 1;
+
+    let cpsNum = u32(%d);
+    var tempCps: array<vec2<f32>, %d>;
+
+    var index = 0u;
     while(index < cpsNum * 2)
     {
         tempCps[index].x = cps[index];
         tempCps[index].y = cps[index + 1];
-        index += 2;
+        index += 2u;
     }
-    
-    var height = 0;
+
+    var height = 0u;
     while (height * cpsWidth < cpsNum)
     {
-        var tempArr: array<vec2<f32>, cpsNum>;
-        
-        for (var k = 1; k < degree + 1; k++)
+        var tempArr: array<vec2<f32>, %d>;
+
+        for (var k = 1u; k < degree + 1; k++)
         {
-            var a = 0;
+            var a = 0u;
             while (a < cpsNum)
             {
                 tempArr[a] = vec2<f32>(0.0, 0.0);
-                a += 2;
+                a += 2u;
             }
-            
-            let iInitial = uinterval - degree + k + 1;
-            
-            for (var i = iInitial; i < interval + 2; i++)
+
+            var iInitial = uInterval - degree + k + 1;
+
+            for (var i = iInitial; i < uInterval + 2; i++)
             {
-                let alpha = (uInputs[gloval_invocation_id.x] - knots[i - 1]) / (knots[i + degree - k] - knots[i - 1]);
-                
-                temp[i] = (1 - alpha) * tempCps[i - 1 + height * cpsWidth] + alpha * tempCps[i + height * cpsWidth];
+                let alpha = (uInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+
+                tempArr[i] = (1 - alpha) * tempCps[i - 1 + height * cpsWidth] + alpha * tempCps[i + height * cpsWidth];
             }
-            
-            for (var i = 0; i < cpsWidth; i++)
+
+            for (var i = 0u; i < cpsWidth; i++)
             {
-                tempCps[i + height * cpsWidth] = temp[i];
+                tempCps[i + height * cpsWidth] = tempArr[i];
             }
         }
         uResult[height] = tempCps[uTempIndex + height * cpsWidth];
@@ -278,11 +280,12 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     }
     
     // v 방향 b spline
-    var vTempIndex = vIntervals[gloval_invocation_id.x] + 1;
+    let vInterval = vIntervals[global_invocation_id.x];
+    var vTempIndex = vInterval + 1;
     
 }
 
-""" % (degree, cpsNum, cpsNum)
+""" % (degree, cpsNum, cpsNum, cpsNum, cpsLen, cpsLen, cpsLen)
 
 out = np.zeros(len(serial_cps), dtype=np.uint32)
 out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals},

@@ -4,11 +4,6 @@
 
 
 
-
-
-
-
-
 for u in range(0, len(uDraws)):         # u 방향 b spline
         interval = uIntervals[u]
         tempIndex = interval + 1                                        # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
