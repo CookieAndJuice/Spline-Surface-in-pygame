@@ -147,10 +147,18 @@ maxH = minH + interval * 3
 h = interval * 3 / (cpsNum- 1)
 
 # Control Points
-control_points = [[vec2d(minW + n * h, minH + a * h) for n in range(0, cpsNum)] for a in range(0, cpsNum)]
+control_points = np.array([[[minW + n * h, minH + a * h] for n in range(0, cpsNum)] for a in range(0, cpsNum)])
 for a in control_points:
     for b in a:
-        print("(" + str(b.x) + ", " + str(b.y) + ")", end = ", ")
+        print("(" + str(b[0]) + ", " + str(b[1]) + ")", end = ", ")
+
+# Serialize Control Points
+serial_cps = []
+for a in control_points:
+    for b in a:
+        serial_cps.append(b)
+serial_cps = np.array(serial_cps)
+print(serial_cps)
 
 # Degree
 degree = 3
@@ -159,70 +167,52 @@ degree = 3
 knots = np.array([i for i in range(0, cpsNum + degree - 1)])
 print(knots)
 
-# Serialize Control Points
-serial_cps = []
-for points in control_points:
-    for point in points:
-        serial_cps.append(point.x)
-        serial_cps.append(point.y)
-serial_cps = np.array(serial_cps)
-
 # domain knots 계산
 start = degree - 1              # domain 시작 지점
 end = len(knots) - degree        # domain 끝 지점
 domainNum = end - start + 1     # domain knots 개수
 
 # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
-vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
-print(uDraws)
-print(vDraws)
+draws = np.array([[int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start, int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start]
+                            for theta in range(0, 372, 12)])
 
 # interval lists
-uIntervals = []
-for u in uDraws:
-    interval = 0
-    if (u == knots[end]):
-        interval = end - 1
-    else:
-        interval = findInterval(knots, u)
-    uIntervals.append(interval)
-uIntervals = np.array(uIntervals)
+intervals = []
+for d in draws:
+    uInterval = 0
+    vInterval = 0
 
-vIntervals = []
-for v in vDraws:
-    interval = 0
-    if (v == knots[end]):
-        interval = end - 1
+    if (d[0] == knots[end]):
+        uInterval = end - 1
     else:
-        interval = findInterval(knots, v)
-    vIntervals.append(interval)
-vIntervals = np.array(vIntervals)
+        uInterval = findInterval(knots, d[0])
+
+    if (d[1] == knots[end]):
+        vInterval = end - 1
+    else:
+        vInterval = findInterval(knots, d[1])
+    intervals.append([uInterval, vInterval])
+        
+intervals = np.array(intervals)
 
 ######################################################################################
 # B Spline Function
 
 compute_B_Spline_code = """
 @group(0) @binding(0)
-var<storage, read> uInputs: array<f32>;
+var<storage, read> uvInputs: array<vec2<f32>>;
 
 @group(0) @binding(1)
-var<storage, read> vInputs: array<f32>;
+var<storage, read> cps: array<vec2<f32>>;
 
 @group(0) @binding(2)
-var<storage, read> cps: array<f32>;
-
-@group(0) @binding(3)
 var<storage, read> knots: array<u32>;
 
+@group(0) @binding(3)
+var<storage, read> uvIntervals: array<vec2<u32>>;
+
 @group(0) @binding(4)
-var<storage, read> uIntervals: array<u32>;
-
-@group(0) @binding(5)
-var<storage, read> vIntervals: array<u32>;
-
-@group(0) @binding(6)
-var<storage, read_write> output: array<u32>;
+var<storage, read_write> output: array<vec2<u32>>;
 
 @compute @workgroup_size(32)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
@@ -231,19 +221,19 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     let cpsWidth = u32(%d);
     let cpsHeight = u32(%d);
     var uResult: array<vec2<f32>, %d>;
+    let cpsNum = u32(%d);
 
     // u 방향 b spline
-    let uInterval = uIntervals[global_invocation_id.x];
+    let uInterval = uvIntervals[global_invocation_id.x].x;
     var uTempIndex = uInterval + 1;
 
-    let cpsNum = u32(%d);
     var tempCps: array<vec2<f32>, %d>;
 
     var index = 0u;
     while(index < cpsNum * 2)
     {
-        tempCps[index].x = cps[index];
-        tempCps[index].y = cps[index + 1];
+        tempCps[index].x = cps[index].x;
+        tempCps[index].y = cps[index].y;
         index += 2u;
     }
 
@@ -265,7 +255,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
 
             for (var i = iInitial; i < uInterval + 2; i++)
             {
-                let alpha = (uInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+                let alpha = (uvInputs[global_invocation_id.x].x - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
 
                 tempArr[i] = (1 - alpha) * tempCps[i - 1 + height * cpsWidth] + alpha * tempCps[i + height * cpsWidth];
             }
@@ -280,27 +270,71 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     }
     
     // v 방향 b spline
-    let vInterval = vIntervals[global_invocation_id.x];
+    let vInterval = uvIntervals[global_invocation_id.x].y;
     var vTempIndex = vInterval + 1;
     
+    var tempUR: array<vec2<f32>, %d>;
+    var iU = 0u;
+    while(iU < cpsWidth * 2)
+    {
+        tempUR[iU].x = uResult[iU].x;
+        tempUR[iU].y = uResult[iU].y;
+        iU += 2u;
+    }
+
+    var tempArr: array<vec2<f32>, %d>;
+    for (var k = 1u; k < degree + 1; k++)
+    {
+        var a = 0u;
+        while (a < cpsNum)
+        {
+            tempArr[a] = vec2<f32>(0.0, 0.0);
+            a += 2u;
+        }
+
+        var iInitial = vInterval - degree + k + 1;
+
+        for (var i = iInitial; i < vInterval + 2; i++)
+        {
+            let alpha = (uvInputs[global_invocation_id.x].y - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+
+            tempArr[i] = (1 - alpha) * tempUR[i - 1] + alpha * tempUR[i];
+        }
+
+        for (var i = 0u; i < cpsWidth; i++)
+        {
+            tempUR[i] = tempArr[i];
+        }
+    }
+    output[global_invocation_id.x].x = u32(tempUR[vTempIndex].x);
+    output[global_invocation_id.x].y = u32(tempUR[vTempIndex].y);
 }
 
-""" % (degree, cpsNum, cpsNum, cpsNum, cpsLen, cpsLen, cpsLen)
+""" % (degree, cpsNum, cpsNum, cpsNum, cpsLen, cpsLen, cpsLen, cpsLen, cpsLen)
 
-out = np.zeros(len(serial_cps), dtype=np.uint32)
-out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals},
-                           {6: out.nbytes}, compute_B_Spline_code, n = 32)
+out = np.zeros(len(draws) * 2, dtype=np.uint32)
+out = compute_with_buffers({0: draws, 1: control_points, 2: knots, 3: intervals},
+                           {4: out.nbytes}, compute_B_Spline_code, n = 32)
 # Select data from buffer at binding 4
-bSplines = np.frombuffer(out[6], dtype=np.uint32)
-print(bSplines.tolist())
-print(len(bSplines))
+bSplines = np.frombuffer(out[4], dtype=np.uint32)
+bSplines = bSplines.tolist()
+for a in range(0, int(len(bSplines)/2)):
+    print(bSplines[a], end=" ")
+print(" ")
+for b in range(int(len(bSplines)/2), len(bSplines)):
+    print(bSplines[b], end=" ")
+print(" ")
 
 ######################################################################################
 
-bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws, uIntervals, vIntervals)
+# bSplineList = calB_Spline(control_points, knots, degree, uDraws, vDraws, uIntervals, vIntervals)
 
-print(bSplineList)
+# print(bSplineList)
 
 ## vec2d 형태를 1차원 배열 형태로 직렬화해서 셰이더에 넘겨야 한다.
 ## 그 말은 출력할 때에도 반대로 해줘야 해야한다는 소리
 ## compute shader에서 어떤 것을 병렬처리로 계산해야 할 지 정해야 함 -> 아마 u방향, v방향 knot들에 대한 de boor 알고리즘일 듯
+
+# 교수님 피드백
+# 1.파이썬의 numpy를 이용해서 compute shader에 vector 값으로 넘기기
+# 2.NURBS 말고 uniform만 b spline surface를 구현해보기
