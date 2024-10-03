@@ -1,6 +1,5 @@
 import math
 import numpy as np
-from wgpu.utils.compute import compute_with_buffers
 
 ######################################################################################
 # B Spline
@@ -167,108 +166,18 @@ for vd in range(0, len(vDraws)):
 uIntervals = np.array(uIntervals)
 vIntervals = np.array(vIntervals)
 
-uResultLength = len(uDraws) * cpsHeight             # uResult의 크기
-
-######################################################################################
-# compute shader code
-compute_shader_code = f"""
-@group(0) @binding(0)
-var<storage, read> uInputs: array<f32>;
-
-@group(0) @binding(1)
-var<storage, read> vInputs: array<f32>;
-
-@group(0) @binding(2)
-var<storage, read> control_points: array<vec2<f32>>;
-
-@group(0) @binding(3)
-var<storage, read> knots: array<u32>;
-
-@group(0) @binding(4)
-var<storage, read> uIntervals: array<u32>;
-
-@group(0) @binding(5)
-var<storage, read> vIntervals: array<u32>;
-
-@group(0) @binding(6)
-var<storage, read_write> output: array<vec2<f32>>;
-
-@compute @workgroup_size(32)
-fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
-{{
-    
-    let degree = u32({degree});
-    let cpsWidth = u32({cpsWidth});
-    let cpsHeight = u32({cpsHeight});
-    let cpsNum = u32({cpsWidth});
-    var uResult: array<vec2<f32>, {uResultLength}>;
-    
-    // de Boor Algorithm
-    // u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
-    let yOffset = cpsWidth;                                     // 높이값 넘어갈 때 offset
-    
-    let uInterval = uIntervals[global_invocation_id.x];
-    var tempIndex = uInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
-    
-    for (var height = 0u; height < cpsHeight; height++)
-    {{
-        let nowPos = height * yOffset;                          // 계산값 임시 저장 리스트
-        var tempCps: array<vec2<f32>, {cpsWidth}>;
-        for(var num = 0u; num < {cpsWidth}; num++)
-        {{
-            tempCps[num] = control_points[nowPos + num];
-        }}
-        
-        for (var k = 1u; k < degree + 1; k++)
-        {{
-            let iInitial = uInterval - degree + k + 1;
-            
-            for (var i = uInterval + 1u; i < iInitial - 1u; i--)
-            {{
-                let alpha = (uInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);     // 형변환 주의
-                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];     // 형변환 주의
-            }}
-        }}
-        uResult[global_invocation_id.x * cpsHeight + height] = tempCps[tempIndex];
-    }}
-    
-    // v 방향 계산
-    let xOffset = cpsHeight;                                    // 너비값 넘어갈 때 offset
-    
-    let vInterval = vIntervals[global_invocation_id.x];
-    tempIndex = vInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
-    
-    let nowPos = global_invocation_id.x * xOffset;                // 계산값 임시 저장 리스트
-    var tempCps: array<vec2<f32>, {cpsWidth}>;
-    for(var num = 0u; num < {cpsWidth}; num++)
-    {{
-        tempCps[num] = control_points[nowPos + num];
-    }}
-    
-    for (var k = 1u; k < degree + 1; k++)
-    {{
-        let iInitial = vInterval - degree + k + 1;
-        
-        for (var i = vInterval + 1u; i < iInitial - 1u; i--)
-        {{
-            let alpha = (vInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);     // 형변환 주의
-            tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];     // 형변환 주의
-        }}
-    }}
-    output[global_invocation_id.x] = tempCps[tempIndex];
-    
-}}
-"""
-
 ######################################################################################
 
-# print("B-Spline 결과")
-# bSplineList = calB_Spline(serial_cps, knots, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree)
-# print(bSplineList)
-# print("")
+print("B-Spline 결과")
+bSplineList = calB_Spline(serial_cps, knots, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree)
+print(bSplineList)
+print("")
 
-out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals}, 
-                           {6: (31, "f")}, compute_shader_code, n=32)
-bSplineList = np.frombuffer(out[6], dtype=np.float32)
-print(bSplineList.tolist())
-print(len(bSplineList))
+# 완전히 잘못 생각해서, control points가 무조건 5x5 정사각형일 거라고 가정하고 코드를 짰다.
+# 이를 바로잡기 위해
+# 첫번째 생각대로 코드를 다시 짜려 한다.
+# 동일한 함수에 width와 height를 반대로 넣고, wOffset과 hOffset을 반대로 넣으면 u 방향과 v 방향을 둘 다 만들 수 있게 할 것이다.
+
+# 이번에 잘못 생각한 점
+# 어차피 B-Spline Surface는 u 방향 -> v 방향 혹은 그 반대 순서로 파이프라인이 되어 있으므로 분리가 불가능하다.
+# 그러니 그냥 하나의 함수에 연속으로 넣는 것이 더 낫다.

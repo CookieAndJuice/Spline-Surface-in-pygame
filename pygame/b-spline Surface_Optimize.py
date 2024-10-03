@@ -2,7 +2,6 @@ import pygame, sys
 from pygame.locals import *
 import math
 import numpy as np
-from wgpu.utils.compute import compute_with_buffers
 
 ######################################################################################
 # B Spline
@@ -19,8 +18,54 @@ def findInterval(knotList, point):
     
     return returnIndex
 
-# Cubic B Spline Surface using De Boor Algorithm. Compute Shader in WebGPU
+# Cubic
+def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree):
+    
+    uResult = []                            # u 방향 계산 결과
+    result = []                             # b spline 계산 최종 결과
 
+    # de Boor Algorithm
+    
+    # u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
+    yOffset = cpsWidth                      # y값 넘어갈 때 offset
+    
+    for drawNum in range(0, len(uDraws)):
+        interval = uIntervals[drawNum]
+        tempIndex = interval + 1                                           # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        
+        for height in range(0, cpsHeight):
+            nowPos = height * yOffset
+            tempCps = np.array([cps[nowPos + num] for num in range(0, cpsWidth)])       # 계산값 임시 저장 리스트
+            
+            for k in range(1, degree + 1):                                                          # degree 인덱스 k
+                iInitial = interval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
+                
+                for i in range(interval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
+                    alpha = (uDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
+                    tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]                          # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+                
+            uResult.append(tempCps[tempIndex])
+    
+    # v 방향 계산
+    xOffset = cpsHeight                     # x값 넘어갈 때 offset
+    
+    for drawNum in range(0, len(vDraws)):
+        interval = vIntervals[drawNum]
+        tempIndex = interval + 1                                           # 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        
+        nowPos = drawNum * xOffset
+        tempCps = np.array([uResult[nowPos + num] for num in range(0, cpsWidth)])       # 계산값 임시 저장 리스트
+        
+        for k in range(1, degree + 1):                                                          # degree 인덱스 k
+            iInitial = interval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
+            
+            for i in range(interval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
+                alpha = (vDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
+                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]                          # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
+            
+        result.append(tempCps[tempIndex])
+        
+    return result
 
 ######################################################################################
 

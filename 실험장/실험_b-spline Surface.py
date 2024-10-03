@@ -89,11 +89,12 @@ def calB_Spline(cps, knts, degree, numJoints=30):
             uResult[height].append(tempCps[height][tempIndex])
 
     # u에 의한 값들 중간 점검
+    print("u 결과값")
     for ind in range(0, len(uResult)):
         for idx in range(0, len(uResult[ind])):
             print("(" + str(uResult[ind][idx].x) + ", " + str(uResult[ind][idx].y) + ")", end = ", ")
     print("fin.")
-    print()
+    print("")
     
     for v in range(0, len(vDraws)):         # v 방향 b spline
         if (vDraws[v] == knts[end]):

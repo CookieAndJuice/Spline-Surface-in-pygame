@@ -6,7 +6,7 @@ var<storage, read> uInputs: array<f32>;
 var<storage, read> vInputs: array<f32>;
 
 @group(0) @binding(2)
-var<storage, read> cps: array<f32>;
+var<storage, read> control_points: array<vec2<f32>>;
 
 @group(0) @binding(3)
 var<storage, read> knots: array<u32>;
