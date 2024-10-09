@@ -18,101 +18,72 @@ var<storage, read> uIntervals: array<u32>;
 var<storage, read> vIntervals: array<u32>;
 
 @group(0) @binding(6)
-var<storage, read_write> output: array<u32>;
+var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(32)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
-{
-    let degree = u32(%d);
-    let cpsWidth = u32(%d);
-    let cpsHeight = u32(%d);
-    var uResult: array<vec2<f32>, %d>;
-    let cpsNum = u32(%d);
+{{
 
-    // u 방향 b spline
-    let uInterval = uIntervals[global_invocation_id.x];
-    var uTempIndex = uInterval + 1;
+    let degree = u32({degree});
+    let cpsWidth = u32({cpsWidth});
+    let cpsHeight = u32({cpsHeight});
+    let cpsNum = u32({cpsWidth});
+    var uResult: array<vec2<f32>, {uResultLength}>;
+    let index = global_invocation_id.x;
 
-    var tempCps: array<vec2<f32>, %d>;
+    // de Boor Algorithm
+    // u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
+    let yOffset = cpsWidth;                                     // 높이값 넘어갈 때 offset
 
-    var index = 0u;
-    while(index < cpsNum * 2)
-    {
-        tempCps[index].x = cps[index];
-        tempCps[index].y = cps[index + 1];
-        index += 2u;
-    }
+    let uInterval = uIntervals[index];
+    var tempIndex = uInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
 
-    var height = 0u;
-    while (height * cpsWidth < cpsNum)
-    {
-        var tempArr: array<vec2<f32>, %d>;
+    for (var height = 0u; height < cpsHeight; height++)
+    {{
+        let nowPos = height * yOffset;                          // 계산값 임시 저장 리스트
+        var tempCps: array<vec2<f32>, {cpsWidth}>;
+        for(var num = 0u; num < {cpsWidth}; num++)
+        {{
+            tempCps[num] = control_points[nowPos + num];
+        }}
 
         for (var k = 1u; k < degree + 1; k++)
-        {
-            var a = 0u;
-            while (a < cpsNum)
-            {
-                tempArr[a] = vec2<f32>(0.0, 0.0);
-                a += 2u;
-            }
+        {{
+            let iInitial = uInterval - degree + k + 1;
 
-            var iInitial = uInterval - degree + k + 1;
+            for (var i = uInterval + 1u; i < iInitial - 1u; i--)
+            {{
+                let alpha = (uInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];
+            }}
+        }}
+        uResult[index * cpsHeight + height] = tempCps[tempIndex];
+    }}
 
-            for (var i = iInitial; i < uInterval + 2; i++)
-            {
-                let alpha = (uInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+    // v 방향 계산
+    let xOffset = cpsHeight;                                    // 너비값 넘어갈 때 offset
 
-                tempArr[i] = (1 - alpha) * tempCps[i - 1 + height * cpsWidth] + alpha * tempCps[i + height * cpsWidth];
-            }
+    let vInterval = vIntervals[index];
+    tempIndex = vInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
 
-            for (var i = 0u; i < cpsWidth; i++)
-            {
-                tempCps[i + height * cpsWidth] = tempArr[i];
-            }
-        }
-        uResult[height] = tempCps[uTempIndex + height * cpsWidth];
-        height++;
-    }
-    
-    // v 방향 b spline
-    let vInterval = vIntervals[global_invocation_id.x];
-    var vTempIndex = vInterval + 1;
-    
-    var tempUR: array<vec2<f32>, %d>;
-    var iU = 0u;
-    while(iU < cpsWidth * 2)
-    {
-        tempUR[iU].x = uResult[iU].x;
-        tempUR[iU].y = uResult[iU].y;
-        iU += 2u;
-    }
+    let nowPos = index * xOffset;                // 계산값 임시 저장 리스트
+    var vTempCps: array<vec2<f32>, {cpsWidth}>;
+    for(var num = 0u; num < {cpsWidth}; num++)
+    {{
+        vTempCps[num] = uResult[nowPos + num];
+    }}
 
-    var tempArr: array<vec2<f32>, %d>;
     for (var k = 1u; k < degree + 1; k++)
-    {
-        var a = 0u;
-        while (a < cpsNum)
-        {
-            tempArr[a] = vec2<f32>(0.0, 0.0);
-            a += 2u;
-        }
+    {{
+        let iInitial = vInterval - degree + k + 1;
 
-        var iInitial = vInterval - degree + k + 1;
-
-        for (var i = iInitial; i < vInterval + 2; i++)
-        {
-            let alpha = (vInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
-
-            tempArr[i] = (1 - alpha) * tempUR[i - 1] + alpha * tempUR[i];
-        }
-
-        for (var i = 0u; i < cpsWidth; i++)
-        {
-            tempUR[i] = tempArr[i];
-        }
-    }
-    output[global_invocation_id.x] = u32(tempUR[vTempIndex].x);
-    output[global_invocation_id.x + 32] = u32(tempUR[vTempIndex].y);
-}
+        for (var i = vInterval + 1u; i < iInitial - 1u; i--)
+        {{
+            let alpha = (vInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+            vTempCps[i] = (1 - alpha) * vTempCps[i - 1] + alpha * vTempCps[i];
+        }}
+    }}
+    output[index] = vTempCps[tempIndex].x;
+    output[index + 31] = tempCps[tempIndex].y;
+}}
 `

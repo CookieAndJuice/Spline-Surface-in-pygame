@@ -41,7 +41,7 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cps
                 iInitial = interval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
                 
                 for i in range(interval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
-                    alpha = (uDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
+                    alpha = (uDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])          # 계수
                     tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]                          # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
                 
             uResult.append(tempCps[tempIndex])
@@ -60,7 +60,7 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cps
             iInitial = interval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
             
             for i in range(interval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
-                alpha = (vDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
+                alpha = (vDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])          # 계수
                 tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i]                          # 결과가 인덱스 (interval+1)로 모이도록 임시 저장
             
         result.append(tempCps[tempIndex])
@@ -119,9 +119,6 @@ def main():
     # knots
     knots = np.array([i for i in range(0, cpsWidth + degree - 1)])
     
-    ######################################################################################
-    # Compute Shader Code
-
     # domain knots 계산
     start = degree - 1              # domain 시작 지점
     end = len(knots) - degree        # domain 끝 지점
@@ -155,7 +152,7 @@ def main():
 
     ######################################################################################
     
-    pygame.display.set_caption("Bezier Curve")
+    pygame.display.set_caption("B Spline Curve")
     clock = pygame.time.Clock()
 
     running = True
@@ -196,7 +193,7 @@ def main():
         # B Spline Surface 계산
         bSplineList = calB_Spline(serial_cps, knots, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree)
         pygame.draw.aalines(screen, BLUE, False, bSplineList)
-
+        
         for bPos in bSplineList:
             pygame.draw.circle(screen, BLUE, bPos, 4.0)
         

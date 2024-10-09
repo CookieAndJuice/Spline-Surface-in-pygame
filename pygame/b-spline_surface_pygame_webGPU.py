@@ -19,9 +19,6 @@ def findInterval(knotList, point):
     
     return returnIndex
 
-# Cubic B Spline Surface using De Boor Algorithm. Compute Shader in WebGPU
-
-
 ######################################################################################
 
 def main():
@@ -72,10 +69,9 @@ def main():
     degree = 3
 
     # knots
-    knots = np.array([i for i in range(0, cpsWidth + degree - 1)])
-    
-    ######################################################################################
-    # Compute Shader Code
+    knots = np.array([i for i in range(0, cpsWidth + degree - 1)], dtype=np.uint32)
+    print(knots)
+    print("")
 
     # domain knots 계산
     start = degree - 1              # domain 시작 지점
@@ -83,34 +79,133 @@ def main():
     domainNum = end - start + 1     # domain knots 개수
 
     # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-    uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
-    vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
+    uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)], dtype=np.float32)
+    vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)], dtype=np.float32)
+    print("uDraws & vDraws")
+    print(uDraws)
+    print(vDraws)
+    print("")
 
-    # interval lists
+    # interval lists        
     uIntervals = []
-    for u in uDraws:
+    for ud in range(0, len(uDraws)):
         interval = 0
-        if (u == knots[end]):
+        if (uDraws[ud] == knots[end]):
             interval = end - 1
         else:
-            interval = findInterval(knots, u)
+            interval = findInterval(knots, uDraws[ud])
         uIntervals.append(interval)
 
     vIntervals = []
-    for v in vDraws:
+    for vd in range(0, len(vDraws)):
         interval = 0
-        if (v == knots[end]):
+        if (vDraws[vd] == knots[end]):
             interval = end - 1
         else:
-            interval = findInterval(knots, v)
+            interval = findInterval(knots, vDraws[vd])
         vIntervals.append(interval)
-        
-    uIntervals = np.array(uIntervals)
-    vIntervals = np.array(vIntervals)
 
+    uIntervals = np.array(uIntervals, dtype=np.uint32)
+    vIntervals = np.array(vIntervals, dtype=np.uint32)
+
+    # uResult의 크기
+    uResultLength = len(uDraws) * cpsHeight
+    outLength = len(uDraws)
+    
+    ######################################################################################
+    # Compute Shader Code
+    compute_shader_code = f"""
+    @group(0) @binding(0)
+    var<storage, read> uInputs: array<f32>;
+
+    @group(0) @binding(1)
+    var<storage, read> vInputs: array<f32>;
+
+    @group(0) @binding(2)
+    var<storage, read> control_points: array<vec2<f32>>;
+
+    @group(0) @binding(3)
+    var<storage, read> knots: array<u32>;
+
+    @group(0) @binding(4)
+    var<storage, read> uIntervals: array<u32>;
+
+    @group(0) @binding(5)
+    var<storage, read> vIntervals: array<u32>;
+
+    @group(0) @binding(6)
+    var<storage, read_write> output: array<f32>;
+
+    @compute @workgroup_size(32)
+    fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
+    {{
+        
+        let degree = u32({degree});
+        let cpsWidth = u32({cpsWidth});
+        let cpsHeight = u32({cpsHeight});
+        let cpsNum = u32({cpsWidth});
+        var uResult: array<vec2<f32>, {uResultLength}>;
+        let index = global_invocation_id.x;
+        
+        // de Boor Algorithm
+        // u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
+        let yOffset = cpsWidth;                                     // 높이값 넘어갈 때 offset
+        
+        let uInterval = uIntervals[index];
+        var tempIndex = uInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        
+        for (var height = 0u; height < cpsHeight; height++)
+        {{
+            let nowPos = height * yOffset;                          // 계산값 임시 저장 리스트
+            var tempCps: array<vec2<f32>, {cpsWidth}>;
+            for(var num = 0u; num < {cpsWidth}; num++)
+            {{
+                tempCps[num] = control_points[nowPos + num];
+            }}
+            
+            for (var k = 1u; k < degree + 1; k++)
+            {{
+                let iInitial = uInterval - degree + k + 1;
+                
+                for (var i = uInterval + 1u; i > iInitial - 1u; i--)
+                {{
+                    let alpha = (uInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+                    tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];
+                }}
+            }}
+            uResult[index * cpsHeight + height] = tempCps[tempIndex];
+        }}
+        
+        // v 방향 계산
+        let xOffset = cpsHeight;                                    // 너비값 넘어갈 때 offset
+        
+        let vInterval = vIntervals[index];
+        tempIndex = vInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+        
+        let nowPos = index * xOffset;                // 계산값 임시 저장 리스트
+        var vTempCps: array<vec2<f32>, {cpsWidth}>;
+        for(var num = 0u; num < {cpsWidth}; num++)
+        {{
+            vTempCps[num] = uResult[nowPos + num];
+        }}
+        
+        for (var k = 1u; k < degree + 1; k++)
+        {{
+            let iInitial = vInterval - degree + k + 1;
+            
+            for (var i = vInterval + 1u; i > iInitial - 1u; i--)
+            {{
+                let alpha = (vInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+                vTempCps[i] = (1 - alpha) * vTempCps[i - 1] + alpha * vTempCps[i];
+            }}
+        }}
+        output[index] = vTempCps[tempIndex].x;
+        output[index + 31] = vTempCps[tempIndex].y;
+    }}
+    """
     ######################################################################################
     
-    pygame.display.set_caption("Bezier Curve")
+    pygame.display.set_caption("B Spline Curve")
     clock = pygame.time.Clock()
 
     running = True
@@ -149,7 +244,14 @@ def main():
             pygame.draw.aalines(screen, BLACK, False, [serial_cps[y * cpsWidth + x] for y in range(0, cpsHeight)])
         
         # B Spline Surface 계산
-        bSplineList = calB_Spline(serial_cps, knots, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree)
+        serial_cps = np.array(serial_cps, dtype=np.float32)
+        out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals}, 
+                                   {6: (outLength*2, "f")}, compute_shader_code, n=1)
+        result = np.frombuffer(out[6], dtype=np.float32)
+        
+        bSplineList = [[float(result[a]), float(result[a + outLength])] for a in range(0, outLength)]
+        serial_cps = [[float(a[0]), float(a[1])] for a in serial_cps]
+        
         pygame.draw.aalines(screen, BLUE, False, bSplineList)
 
         for bPos in bSplineList:
@@ -163,3 +265,13 @@ def main():
     sys.exit()
 
 main()
+
+# 현재 webgpu의 타입과, python의 타입과 numpy의 타입이 서로 맞지 않아서 문제가 계속 발생함.
+# webgpu에 의한 결과는 잘 나오지만 타입 변환 문제로 인해 문제가 발생.
+# TypeError: center argument must be a pair of numbers
+
+# 현재 결과가 이상한 이유(가설)
+# 1. WebGPU의 int형과 float형은 최대 32bit다.
+# 2. 파이썬의 기본 타입은 numpy로 보면 np.int64, np.float64다.
+# 3. 이런 잦은 형변환을 pygame이 따라가지 못한다.
+# 4. pygame에서 selected가 얕은 복사를 이용해서 포인터를 얻은 효과를 사용하기 때문이다.

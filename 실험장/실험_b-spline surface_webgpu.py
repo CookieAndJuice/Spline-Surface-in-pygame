@@ -95,7 +95,7 @@ maxH = minH + interval * 3
 h = interval * 3 / (cpsWidth- 1)
 
 # Control Points
-control_points = np.array([[[minW + n * h, minH + a * h] for n in range(0, cpsWidth)] for a in range(0, cpsHeight)])
+control_points = np.array([[[minW + n * h, minH + a * h] for n in range(0, cpsWidth)] for a in range(0, cpsHeight)], dtype=np.float32)
 for a in control_points:
     for b in a:
         print("(" + str(b[0]) + ", " + str(b[1]) + ")", end = ", ")
@@ -128,7 +128,7 @@ print("")
 degree = 3
 
 # knots
-knots = np.array([i for i in range(0, cpsWidth + degree - 1)])
+knots = np.array([i for i in range(0, cpsWidth + degree - 1)], dtype=np.uint32)
 print(knots)
 print("")
 
@@ -138,8 +138,8 @@ end = len(knots) - degree        # domain 끝 지점
 domainNum = end - start + 1     # domain knots 개수
 
 # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
-vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
+uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)], dtype=np.float32)
+vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)], dtype=np.float32)
 print("uDraws & vDraws")
 print(uDraws)
 print(vDraws)
@@ -164,8 +164,8 @@ for vd in range(0, len(vDraws)):
         interval = findInterval(knots, vDraws[vd])
     vIntervals.append(interval)
 
-uIntervals = np.array(uIntervals)
-vIntervals = np.array(vIntervals)
+uIntervals = np.array(uIntervals, dtype=np.uint32)
+vIntervals = np.array(vIntervals, dtype=np.uint32)
 
 uResultLength = len(uDraws) * cpsHeight             # uResult의 크기
 
@@ -191,7 +191,7 @@ var<storage, read> uIntervals: array<u32>;
 var<storage, read> vIntervals: array<u32>;
 
 @group(0) @binding(6)
-var<storage, read_write> output: array<vec2<f32>>;
+var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(32)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
@@ -202,12 +202,13 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     let cpsHeight = u32({cpsHeight});
     let cpsNum = u32({cpsWidth});
     var uResult: array<vec2<f32>, {uResultLength}>;
+    let index = global_invocation_id.x;
     
     // de Boor Algorithm
     // u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
     let yOffset = cpsWidth;                                     // 높이값 넘어갈 때 offset
     
-    let uInterval = uIntervals[global_invocation_id.x];
+    let uInterval = uIntervals[index];
     var tempIndex = uInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
     
     for (var height = 0u; height < cpsHeight; height++)
@@ -223,40 +224,40 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
         {{
             let iInitial = uInterval - degree + k + 1;
             
-            for (var i = uInterval + 1u; i < iInitial - 1u; i--)
+            for (var i = uInterval + 1u; i > iInitial - 1u; i--)
             {{
-                let alpha = (uInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);     // 형변환 주의
-                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];     // 형변환 주의
+                let alpha = (uInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];
             }}
         }}
-        uResult[global_invocation_id.x * cpsHeight + height] = tempCps[tempIndex];
+        uResult[index * cpsHeight + height] = tempCps[tempIndex];
     }}
     
     // v 방향 계산
     let xOffset = cpsHeight;                                    // 너비값 넘어갈 때 offset
     
-    let vInterval = vIntervals[global_invocation_id.x];
+    let vInterval = vIntervals[index];
     tempIndex = vInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
     
-    let nowPos = global_invocation_id.x * xOffset;                // 계산값 임시 저장 리스트
-    var tempCps: array<vec2<f32>, {cpsWidth}>;
+    let nowPos = index * xOffset;                // 계산값 임시 저장 리스트
+    var vTempCps: array<vec2<f32>, {cpsWidth}>;
     for(var num = 0u; num < {cpsWidth}; num++)
     {{
-        tempCps[num] = control_points[nowPos + num];
+        vTempCps[num] = uResult[nowPos + num];
     }}
     
     for (var k = 1u; k < degree + 1; k++)
     {{
         let iInitial = vInterval - degree + k + 1;
         
-        for (var i = vInterval + 1u; i < iInitial - 1u; i--)
+        for (var i = vInterval + 1u; i > iInitial - 1u; i--)
         {{
-            let alpha = (vInputs[global_invocation_id.x] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);     // 형변환 주의
-            tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];     // 형변환 주의
+            let alpha = (vInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
+            vTempCps[i] = (1 - alpha) * vTempCps[i - 1] + alpha * vTempCps[i];
         }}
     }}
-    output[global_invocation_id.x] = tempCps[tempIndex];
-    
+    output[index] = vTempCps[tempIndex].x;
+    output[index + 31] = vTempCps[tempIndex].y;
 }}
 """
 
@@ -267,8 +268,13 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
 # print(bSplineList)
 # print("")
 
+outLength = len(uDraws)
 out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals}, 
-                           {6: (31, "f")}, compute_shader_code, n=32)
-bSplineList = np.frombuffer(out[6], dtype=np.float32)
-print(bSplineList.tolist())
+                           {6: (outLength*2, "f")}, compute_shader_code, n=1)
+result = np.frombuffer(out[6], dtype=np.float32)
+result = np.array(result, np.float64)
+
+bSplineList = [np.array([result[a], result[a + outLength]], dtype=np.float64) for a in range(0, outLength)]
+print(bSplineList)
+print(bSplineList[0].dtype)
 print(len(bSplineList))
