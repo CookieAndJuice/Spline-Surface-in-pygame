@@ -178,6 +178,9 @@ def main():
         screen.fill(WHITE)
         
         if selected is not None:
+            for p in serial_cps:
+                if p[0] == selected[0] and p[1] == selected[1]:
+                    selected = p
             selected[0], selected[1] = pygame.mouse.get_pos()
             pygame.draw.circle(screen, GREEN, (selected[0], selected[1]), 10)
         
@@ -189,6 +192,9 @@ def main():
             pygame.draw.aalines(screen, BLACK, False, [serial_cps[y * cpsWidth + x] for x in range(0, cpsWidth)])
         for x in range(0, cpsWidth):
             pygame.draw.aalines(screen, BLACK, False, [serial_cps[y * cpsWidth + x] for y in range(0, cpsHeight)])
+        
+        serial_cps = serial_cps.astype('float32')
+        serial_cps = serial_cps.astype(float)
         
         # B Spline Surface 계산
         bSplineList = calB_Spline(serial_cps, knots, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, cpsHeight, degree)

@@ -222,6 +222,7 @@ def main():
                 for p in serial_cps:
                     if abs(p[0] - event.pos[X]) < 10 and abs(p[1] - event.pos[Y]) < 10 :
                         selected = p
+                        print(selected == p)
             # elif event.type == MOUSEBUTTONDOWN and event.button == 3:
             #     x,y = pygame.mouse.get_pos()
             #     control_points.append(vec2d(x,y))
@@ -231,6 +232,9 @@ def main():
         screen.fill(WHITE)
         
         if selected is not None:
+            for p in serial_cps:
+                if p[0] == selected[0] and p[1] == selected[1]:
+                    selected = p
             selected[0], selected[1] = pygame.mouse.get_pos()
             pygame.draw.circle(screen, GREEN, (selected[0], selected[1]), 10)
         
@@ -244,13 +248,13 @@ def main():
             pygame.draw.aalines(screen, BLACK, False, [serial_cps[y * cpsWidth + x] for y in range(0, cpsHeight)])
         
         # B Spline Surface 계산
-        serial_cps = np.array(serial_cps, dtype=np.float32)
+        serial_cps = serial_cps.astype('float32')
         out = compute_with_buffers({0: uDraws, 1: vDraws, 2: serial_cps, 3: knots, 4: uIntervals, 5: vIntervals}, 
                                    {6: (outLength*2, "f")}, compute_shader_code, n=1)
         result = np.frombuffer(out[6], dtype=np.float32)
         
         bSplineList = [[float(result[a]), float(result[a + outLength])] for a in range(0, outLength)]
-        serial_cps = [[float(a[0]), float(a[1])] for a in serial_cps]
+        serial_cps = serial_cps.astype(float)
         
         pygame.draw.aalines(screen, BLUE, False, bSplineList)
 
@@ -270,8 +274,10 @@ main()
 # webgpu에 의한 결과는 잘 나오지만 타입 변환 문제로 인해 문제가 발생.
 # TypeError: center argument must be a pair of numbers
 
-# 현재 결과가 이상한 이유(가설)
+# 현재 결과가 이상한 이유
 # 1. WebGPU의 int형과 float형은 최대 32bit다.
 # 2. 파이썬의 기본 타입은 numpy로 보면 np.int64, np.float64다.
 # 3. 이런 잦은 형변환을 pygame이 따라가지 못한다.
 # 4. pygame에서 selected가 얕은 복사를 이용해서 포인터를 얻은 효과를 사용하기 때문이다.
+
+# 해결 : 선택된 경우에 한해서 다시 할당해줬음
