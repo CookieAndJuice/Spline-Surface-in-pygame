@@ -281,3 +281,10 @@ main()
 # 4. pygame에서 selected가 얕은 복사를 이용해서 포인터를 얻은 효과를 사용하기 때문이다.
 
 # 해결 : 선택된 경우에 한해서 다시 할당해줬음
+
+# 교수님 피드백
+# 필요한 control points의 인덱스를 미리 계산해서 shader로 넘겨주기. 
+# 나의 경우 uInterval, vInterval에 따라서 인덱스가 달라지도록 만들면 인덱스 배열 크기를 줄일 수 있을 듯
+# 앞으로 할 일
+# 1. b spline surface를 온전히 webgpu로 옮기는 것
+# 2. 3d b spline surface 구현 (normal vector도 계산해야 하기 때문에 한 vertex와 인접한 vertices를 가져와야 해서 복잡해진다.)
