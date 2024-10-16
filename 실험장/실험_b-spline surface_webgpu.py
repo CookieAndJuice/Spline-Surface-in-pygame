@@ -167,7 +167,12 @@ for vd in range(0, len(vDraws)):
 uIntervals = np.array(uIntervals, dtype=np.uint32)
 vIntervals = np.array(vIntervals, dtype=np.uint32)
 
+# index array
+cp_Indices = []
+
+
 uResultLength = len(uDraws) * cpsHeight             # uResult의 크기
+tempWidth = degree + 1                              # tempCps의 크기
 
 ######################################################################################
 # compute shader code
@@ -205,17 +210,18 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     let index = global_invocation_id.x;
     
     // de Boor Algorithm
+    let tempWidth = degree + 1;
+    let uInterval = uIntervals[index];
+    let vInterval = vIntervals[index];
+    
     // u 방향 계산 (계산 순서 : u 하나에 대해 모든 높이 계산 -> 다음 u 계산)
     let yOffset = cpsWidth;                                     // 높이값 넘어갈 때 offset
     
-    let uInterval = uIntervals[index];
-    var tempIndex = uInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
-    
-    for (var height = 0u; height < cpsHeight; height++)
+    for (var height = 0u; height < {tempWidth}; height++)
     {{
-        let nowPos = height * yOffset;                          // 계산값 임시 저장 리스트
-        var tempCps: array<vec2<f32>, {cpsWidth}>;
-        for(var num = 0u; num < {cpsWidth}; num++)
+        let nowPos = (height + vInterval - degree + 1) * yOffset + (uInterval - degree + 1);        // iInitial - 1
+        var tempCps: array<vec2<f32>, {tempWidth}>;                          // 계산값 임시 저장 리스트
+        for(var num = 0u; num < {tempWidth}; num++)
         {{
             tempCps[num] = control_points[nowPos + num];
         }}
@@ -223,25 +229,24 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
         for (var k = 1u; k < degree + 1; k++)
         {{
             let iInitial = uInterval - degree + k + 1;
+            var uIntervalIndex = degree;
             
             for (var i = uInterval + 1u; i > iInitial - 1u; i--)
             {{
                 let alpha = (uInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
-                tempCps[i] = (1 - alpha) * tempCps[i - 1] + alpha * tempCps[i];
+                tempCps[uIntervalIndex] = (1 - alpha) * tempCps[uIntervalIndex - 1] + alpha * tempCps[uIntervalIndex];
+                uIntervalIndex--;
             }}
         }}
-        uResult[index * cpsHeight + height] = tempCps[tempIndex];
+        uResult[index * tempWidth + height] = tempCps[degree];
     }}
     
     // v 방향 계산
-    let xOffset = cpsHeight;                                    // 너비값 넘어갈 때 offset
-    
-    let vInterval = vIntervals[index];
-    tempIndex = vInterval + 1;                              // 계산식에서 인덱스를 맞추기 위해 쓰는 임시 변수
+    let xOffset = tempWidth;                                    // 너비값 넘어갈 때 offset
     
     let nowPos = index * xOffset;                // 계산값 임시 저장 리스트
-    var vTempCps: array<vec2<f32>, {cpsWidth}>;
-    for(var num = 0u; num < {cpsWidth}; num++)
+    var vTempCps: array<vec2<f32>, {tempWidth}>;
+    for(var num = 0u; num < {tempWidth}; num++)
     {{
         vTempCps[num] = uResult[nowPos + num];
     }}
@@ -249,15 +254,17 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u)
     for (var k = 1u; k < degree + 1; k++)
     {{
         let iInitial = vInterval - degree + k + 1;
+        var vIntervalIndex = degree;
         
         for (var i = vInterval + 1u; i > iInitial - 1u; i--)
         {{
             let alpha = (vInputs[index] - f32(knots[i - 1])) / f32(knots[i + degree - k] - knots[i - 1]);
-            vTempCps[i] = (1 - alpha) * vTempCps[i - 1] + alpha * vTempCps[i];
+            vTempCps[vIntervalIndex] = (1 - alpha) * vTempCps[vIntervalIndex - 1] + alpha * vTempCps[vIntervalIndex];
+            vIntervalIndex--;
         }}
     }}
-    output[index] = vTempCps[tempIndex].x;
-    output[index + 31] = vTempCps[tempIndex].y;
+    output[index] = vTempCps[degree].x;
+    output[index + 31] = vTempCps[degree].y;
 }}
 """
 
