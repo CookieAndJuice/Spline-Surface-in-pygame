@@ -19,10 +19,27 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
+def calBasisFunction(u):
+    coefficieents = []
+    
+    a = (1 - u) * (1 - u) * (1 - u) / 6
+    b = (3 * u * u * u - 6 * u * u + 4) / 6
+    c = (-3 * u * u * u + 3 * u * u + 3 * u + 1) / 6
+    d = u * u * u / 6
+    
+    coefficieents.append(a)
+    coefficieents.append(b)
+    coefficieents.append(c)
+    coefficieents.append(d)
+    
+    return coefficieents
+
+# Cubic
 def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, degree):
     
     uResult = []                            # u 방향 계산 결과
     result = []                             # b spline 계산 최종 결과
+    cubicBasis = []
 
     # de Boor Algorithm
     tempWidth = degree + 1                  # 매 u와 v마다 tempcps의 길이
@@ -34,25 +51,18 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, deg
         uInterval = uIntervals[drawNum]
         vInterval = vIntervals[drawNum]
         
+        cubicBasis = calBasisFunction(uDraws[drawNum])
+        
         for height in range(0, tempWidth):
-            nowPos = (height + vInterval - degree + 1) * yOffset + (uInterval - degree + 1)               # iInitial - 1
-            tempCps = np.array([cps[nowPos + num] for num in range(0, tempWidth)])       # 계산값 임시 저장 리스트
+            nowPos = (height + vInterval - degree + 1) * yOffset + (uInterval - degree + 1)
             
-            print(tempCps[0], tempCps[1], tempCps[2], tempCps[3])
+            uPoint = 0
+            for num in range(0, tempWidth):
+                uPoint += cubicBasis[num] * cps[nowPos + num]
+                print(uPoint, cubicBasis[num], cps[nowPos + num])
             
-            for k in range(1, degree + 1):                                                          # degree 인덱스 k
-                iInitial = uInterval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
-                intervalIndex = degree                                                           # tempCps의 범위는 0 ~ degree이다.
-
-                alpha = 0
-                for i in range(uInterval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
-                    alpha = (uDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
-                    tempCps[intervalIndex] = (1 - alpha) * tempCps[intervalIndex - 1] + alpha * tempCps[intervalIndex]      # 결과가 마지막 인덱스로 모이도록 임시 저장
-                    intervalIndex -= 1
-                print(alpha)
-                
-            print(tempCps[degree])
-            uResult.append(tempCps[degree])             # tempCps 마지막 인덱스 추가
+            print(uPoint)
+            uResult.append(uPoint)
     
     # v 방향 계산
     xOffset = tempWidth                     # 너비값 넘어갈 때 offset. uResult 기준이어야 하므로, cps를 따라가지 않고 tempWidth를 따라간다
@@ -73,7 +83,7 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, deg
                 intervalIndex = intervalIndex - 1
             
         result.append(tempCps[degree])              # tempCps 마지막 인덱스 추가
-        
+    
     return result
 
 ######################################################################################
