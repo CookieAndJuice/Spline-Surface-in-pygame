@@ -19,13 +19,17 @@ def findInterval(knotList, point):
     return returnIndex
 
 # Cubic
-def calBasisFunction(u):
+def calBasisFunction(u, interval):
     coefficieents = []
     
-    a = (1 - u) * (1 - u) * (1 - u) / 6
-    b = (3 * u * u * u - 6 * u * u + 4) / 6
-    c = (-3 * u * u * u + 3 * u * u + 3 * u + 1) / 6
-    d = u * u * u / 6
+    a = (interval + 1 - u) * (interval + 1 - u) * (interval + 1 - u) / 6
+    b = ((u - interval + 2) * (interval + 1 - u) * (interval + 1 - u) +
+        (interval + 2 - u) * (u - interval + 1) * (interval + 1 - u) +
+        (interval + 2 - u) * (interval + 2 - u) * (u - interval)) / 6
+    c = ((u - interval + 1) * (u - interval + 1) * (interval + 1 - u) +
+        (u - interval + 1) * (interval + 2 - u) * (u - interval) +
+        (interval + 3 - u) * (u - interval) * (u - interval)) / 6
+    d = (u - interval) * (u - interval) * (u - interval) / 6
     
     coefficieents.append(a)
     coefficieents.append(b)
@@ -51,7 +55,7 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, deg
         uInterval = uIntervals[drawNum]
         vInterval = vIntervals[drawNum]
         
-        cubicBasis = calBasisFunction(uDraws[drawNum])
+        cubicBasis = calBasisFunction(uDraws[drawNum], uInterval)
         
         for height in range(0, tempWidth):
             nowPos = (height + vInterval - degree + 1) * yOffset + (uInterval - degree + 1)
@@ -59,9 +63,7 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, deg
             uPoint = 0
             for num in range(0, tempWidth):
                 uPoint += cubicBasis[num] * cps[nowPos + num]
-                print(uPoint, cubicBasis[num], cps[nowPos + num])
             
-            print(uPoint)
             uResult.append(uPoint)
     
     # v 방향 계산
@@ -70,19 +72,15 @@ def calB_Spline(cps, knts, uDraws, vDraws, uIntervals, vIntervals, cpsWidth, deg
     for drawNum in range(0, len(vDraws)):
         interval = vIntervals[drawNum]
         
-        nowPos = drawNum * xOffset                                          # uResult가 0~4 / 5~9 / ... 단위로 묶여서 단위마다 x값이 증가함. 단위 내에서는 y값 증가.
-        tempCps = np.array([uResult[nowPos + num] for num in range(0, tempWidth)])       # 계산값 임시 저장 리스트
+        cubicBasis = calBasisFunction(vDraws[drawNum], interval)
         
-        for k in range(1, degree + 1):                                                          # degree 인덱스 k
-            iInitial = interval - degree + k + 1                                                # control points 계산 결과들의 인덱스 i의 초기값 (degree마다 바뀜)
-            intervalIndex = degree                                                              # tempCps의 범위는 0 ~ degree이다.
+        nowPos = drawNum * xOffset                                          # uResult가 0~4 / 5~9 / ... 단위로 묶여서 단위마다 x값이 증가함. 단위 내에서는 y값 증가.
+        
+        vPoint = 0
+        for num in range(0, tempWidth):
+            vPoint += cubicBasis[num] * uResult[nowPos + num]
             
-            for i in range(interval + 1, iInitial - 1, -1):                                             # i부터 최대값까지 반복 계산
-                alpha = (vDraws[drawNum] - knts[i - 1]) / (knts[i + degree - k] - knts[i - 1])           # 계수
-                tempCps[intervalIndex] = (1 - alpha) * tempCps[intervalIndex - 1] + alpha * tempCps[intervalIndex]      # 결과가 마지막 인덱스로 모이도록 임시 저장
-                intervalIndex = intervalIndex - 1
-            
-        result.append(tempCps[degree])              # tempCps 마지막 인덱스 추가
+        result.append(vPoint)              # tempCps 마지막 인덱스 추가
     
     return result
 
@@ -144,8 +142,8 @@ def main():
     domainNum = end - start + 1     # domain knots 개수
 
     # 그릴 점 (u, v) - (start <= u, v <= end)     ## 원 -> 임의의 크기를 정해서 비율을 줄임
-    uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
-    vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 12)])
+    uDraws = np.array([int(500 + 400 * math.cos(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 1)])
+    vDraws = np.array([int(500 + 400 * math.sin(math.radians(theta))) / 1000 * (domainNum - 1) + start for theta in range(0, 372, 1)])
 
     # interval lists
     uIntervals = []
